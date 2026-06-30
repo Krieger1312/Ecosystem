@@ -65,8 +65,10 @@ class AutonomousAgent:
         print(f"MCP-сервер '{name}' подключён")
 
     async def connect_default_servers(self):
-        """Подключает два стандартных MCP-сервера агента: fetch (чтение веб-страниц)
-        и filesystem (чтение/запись файлов в изолированной рабочей папке)."""
+        """Подключает три стандартных MCP-сервера агента: fetch (чтение веб-страниц),
+        filesystem (чтение/запись файлов в изолированной рабочей папке) и puppeteer
+        (управление полноценным браузером). Подключения независимы — отказ одного
+        сервера не мешает остальным (см. connect_mcp_server)."""
         # рабочая папка filesystem-сервера должна существовать до запуска сервера
         os.makedirs(AGENT_WORKSPACE_DIR, exist_ok=True)
 
@@ -76,6 +78,10 @@ class AutonomousAgent:
 
         await self.connect_mcp_server(
             "filesystem", "npx", ["-y", "@modelcontextprotocol/server-filesystem", AGENT_WORKSPACE_DIR]
+        )
+
+        await self.connect_mcp_server(
+            "puppeteer", "npx", ["-y", "@modelcontextprotocol/server-puppeteer"]
         )
 
     async def close(self):
@@ -310,8 +316,8 @@ class AutonomousAgent:
 async def main():
     agent = AutonomousAgent(api_key="invalid_test_key")
     try:
-        # подключаем оба стандартных сервера: fetch (чтение веб-страниц) и
-        # filesystem (чтение/запись в agent_workspace)
+        # подключаем три стандартных сервера: fetch (чтение веб-страниц),
+        # filesystem (чтение/запись в agent_workspace) и puppeteer (браузер)
         await agent.connect_default_servers()
         await agent.run("Найди последние новости про ИИ")
     except anthropic.APIStatusError as e:
