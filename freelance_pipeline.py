@@ -19,12 +19,18 @@ PROPOSAL_SYSTEM_PROMPT = (
 EXECUTE_SYSTEM_PROMPT = (
     "Ты — опытный фрилансер-разработчик. Выполни поставленную задачу: напиши "
     "готовое решение (код и/или текст). Не извиняйся и не уточняй детали — "
-    "предложи рабочий вариант на основе того, что есть в ТЗ."
+    "предложи рабочий вариант на основе того, что есть в ТЗ. После генерации "
+    "решение будет автоматически развёрнуто на Vercel и опубликовано клиенту — "
+    "пиши самодостаточный, готовый к деплою результат."
 )
 
 # подпапка внутри agent_workspace (изолированной зоны filesystem MCP-сервера),
 # куда складываются черновики выполненных заданий
 DONE_PROJECTS_DIR = os.path.join(os.path.abspath(AGENT_WORKSPACE_DIR), "done_projects")
+
+# vercel --prod печатает финальный production URL в свой stdout;
+# ищем его явно вместо того, чтобы полагаться на номер строки/формат
+_DEPLOY_URL_RE = re.compile(r"https://\S+\.vercel\.app\S*")
 
 
 def _slugify(title: str) -> str:
@@ -85,8 +91,9 @@ class FreelanceAgent:
         return response.content[0].text
 
     async def execute_task(self, job_title: str, job_description: str) -> str:
-        """Просит модель написать черновое решение задачи и сохраняет его через
-        filesystem MCP-сервер в agent_workspace/done_projects/."""
+        """Просит модель написать черновое решение задачи, сохраняет его в отдельной
+        папке проекта через filesystem MCP-сервер, разворачивает проект на Vercel
+        (профессиональный скилл деплоя) и готовит отчёт для клиента со ссылкой."""
         response = await self._agent.client.messages.create(
             model=PROPOSAL_MODEL,
             max_tokens=2000,
@@ -96,20 +103,69 @@ class FreelanceAgent:
         self._agent._track_usage(response.usage, "Выполнение задачи")
         result_text = response.content[0].text
 
-        # filesystem MCP-сервер пускает запись только внутри своей allowed-директории
-        # и требует, чтобы родительская папка уже существовала — поэтому сначала
-        # создаём done_projects/ (вызов идемпотентен, повторный create_directory не ломает)
-        cd_result = await self._agent._execute_tool("create_directory", {"path": DONE_PROJECTS_DIR})
-        if "ОШИБКА" in cd_result or "не найден" in cd_result:
-            raise RuntimeError(f"Не удалось создать {DONE_PROJECTS_DIR}: {cd_result}")
+        # каждое задание получает свою папку — это и единица деплоя для vercel
+        # (деплоится директория целиком), и естественная группировка файлов проекта
+        project_dir = os.path.join(DONE_PROJECTS_DIR, _slugify(job_title))
 
-        file_path = os.path.join(DONE_PROJECTS_DIR, f"{_slugify(job_title)}.md")
-        wf_result = await self._agent._execute_tool("write_file", {"path": file_path, "content": result_text})
+        # filesystem MCP-сервер не создаёт промежуточные директории сам (требует,
+        # чтобы родительская папка уже существовала) — создаём done_projects/,
+        # а потом вложенную project_dir; оба вызова идемпотентны
+        for directory in (DONE_PROJECTS_DIR, project_dir):
+            cd_result = await self._agent._execute_tool("create_directory", {"path": directory})
+            if "ОШИБКА" in cd_result or "не найден" in cd_result:
+                raise RuntimeError(f"Не удалось создать {directory}: {cd_result}")
+
+        solution_path = os.path.join(project_dir, "solution.md")
+        wf_result = await self._agent._execute_tool("write_file", {"path": solution_path, "content": result_text})
         if "ОШИБКА" in wf_result or "не найден" in wf_result:
-            raise RuntimeError(f"Не удалось сохранить {file_path}: {wf_result}")
+            raise RuntimeError(f"Не удалось сохранить {solution_path}: {wf_result}")
+        print(f"Черновик решения сохранён: {solution_path}")
 
-        print(f"Черновик решения сохранён: {file_path}")
+        # деплой — best-effort: если vercel не установлен/не авторизован в этом
+        # окружении, задача не должна падать целиком, просто отчёт не создастся
+        try:
+            deploy_url = await self.deploy_project(project_dir)
+        except Exception as e:
+            print(f"Не удалось развернуть проект на Vercel: {e}")
+            return result_text
+
+        report_path = os.path.join(project_dir, "report_for_client.txt")
+        report_text = f"Ваш проект готов. Вы можете посмотреть его вживую по этой ссылке: {deploy_url}"
+        rf_result = await self._agent._execute_tool("write_file", {"path": report_path, "content": report_text})
+        if "ОШИБКА" in rf_result or "не найден" in rf_result:
+            raise RuntimeError(f"Не удалось сохранить {report_path}: {rf_result}")
+        print(f"Отчёт для клиента сохранён: {report_path}")
+
         return result_text
+
+    async def deploy_project(self, project_path: str) -> str:
+        """Разворачивает готовый проект на Vercel и возвращает публичный production URL.
+
+        Запускает `vercel --prod --yes` как реальный subprocess в директории
+        project_path (не через MCP filesystem — vercel CLI работает с настоящей
+        файловой системой и должен быть установлен и авторизован на хосте).
+        Перехватывает stdout, ищет в нём опубликованный URL вида *.vercel.app.
+        """
+        process = await asyncio.create_subprocess_exec(
+            "vercel", "--prod", "--yes",
+            cwd=project_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await process.communicate()
+        output = stdout.decode(errors="replace")
+
+        if process.returncode != 0:
+            raise RuntimeError(f"vercel --prod завершился с кодом {process.returncode}:\n{output}")
+
+        matches = _DEPLOY_URL_RE.findall(output)
+        if not matches:
+            raise RuntimeError(f"Не удалось найти URL в выводе vercel:\n{output}")
+
+        # vercel в конце вывода печатает итоговый production URL последним
+        url = matches[-1]
+        print(f"Проект развёрнут: {url}")
+        return url
 
 
 async def run_pipeline(keywords: str):
