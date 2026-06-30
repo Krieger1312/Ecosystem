@@ -1,10 +1,9 @@
-import ipaddress
-import socket
-import time
-import urllib.request
-from urllib.parse import urlparse
+import asyncio
+from contextlib import AsyncExitStack
 
 import anthropic
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 
 
 class AutonomousAgent:
@@ -15,7 +14,8 @@ class AutonomousAgent:
         messages_to_compact: int = 6,
         max_iterations: int = 15,
     ):
-        self.client = anthropic.Anthropic(api_key=api_key)
+        # MCP работает через async-потоки (anyio), поэтому и клиент Anthropic тоже асинхронный
+        self.client = anthropic.AsyncAnthropic(api_key=api_key)
         self.memory = []
         # после скольких сообщений в истории запускаем сжатие
         self.max_memory_len = max_memory_len
@@ -25,6 +25,30 @@ class AutonomousAgent:
         self.max_iterations = max_iterations
         # суммарный расход токенов за всё время жизни агента (включая сжатие памяти и кэш)
         self.total_tokens_spent = 0
+
+        # сессия MCP-сервера появляется после connect_mcp_server()
+        self.mcp_session: ClientSession | None = None
+        # держит подпроцесс сервера и сессию открытыми между вызовами run()
+        self._exit_stack = AsyncExitStack()
+
+    async def connect_mcp_server(self, command: str, args: list[str]):
+        """Запускает внешний MCP-сервер как подпроцесс (stdio) и открывает с ним ClientSession."""
+        server_params = StdioServerParameters(command=command, args=args)
+
+        # stdio_client поднимает подпроцесс и отдаёт пару потоков чтения/записи
+        read_stream, write_stream = await self._exit_stack.enter_async_context(
+            stdio_client(server_params)
+        )
+        # ClientSession — это и есть протокольный уровень MCP поверх этих потоков
+        self.mcp_session = await self._exit_stack.enter_async_context(
+            ClientSession(read_stream, write_stream)
+        )
+        # обязательное рукопожатие перед тем, как сервером можно пользоваться
+        await self.mcp_session.initialize()
+
+    async def close(self):
+        """Корректно закрывает MCP-сессию и завершает подпроцесс сервера."""
+        await self._exit_stack.aclose()
 
     def _track_usage(self, usage, step_label: str):
         """Логирует и накапливает токены, потраченные на один вызов API (включая кэш)."""
@@ -37,17 +61,17 @@ class AutonomousAgent:
             f"(кэш: запись {cache_created} / чтение {cache_read}; всего за сессию: {self.total_tokens_spent})"
         )
 
-    def _create_message(self, **kwargs):
+    async def _create_message(self, **kwargs):
         """Обёртка над messages.create с retry/backoff на временные ошибки API (429/529)."""
         max_retries = 3
         delay = 2
         for attempt in range(1, max_retries + 1):
             try:
-                return self.client.messages.create(**kwargs)
+                return await self.client.messages.create(**kwargs)
             except anthropic.APIStatusError as e:
                 if e.status_code in (429, 529) and attempt < max_retries:
                     print(f"Временная ошибка API ({e.status_code}), повтор через {delay}с...")
-                    time.sleep(delay)
+                    await asyncio.sleep(delay)
                     delay *= 2
                     continue
                 print(f"Ошибка API: {e.status_code} {e.message}")
@@ -90,7 +114,7 @@ class AutonomousAgent:
                 parts.append(str(block))
         return " ".join(parts)
 
-    def _compact_memory(self):
+    async def _compact_memory(self):
         """Сжимает старые сообщения в self.memory в одну выжимку, чтобы не раздувать контекст и не платить за токены старой истории."""
         if len(self.memory) <= self.max_memory_len:
             return
@@ -113,7 +137,7 @@ class AutonomousAgent:
         )
 
         # дешёвая быстрая модель делает выжимку — полноценный Opus для этого не нужен
-        summary_response = self._create_message(
+        summary_response = await self._create_message(
             model="claude-haiku-4-5",
             max_tokens=500,
             system="Сделай максимально краткую техническую выжимку фактов из этого лога действий бота",
@@ -139,66 +163,55 @@ class AutonomousAgent:
         else:
             self.memory = self.memory[:offset] + [{"role": "user", "content": archive_text}] + remaining
 
-    def _get_tools(self):
-        return [
+    async def _get_tools(self) -> list[dict]:
+        """Запрашивает список инструментов у MCP-сервера и конвертирует их в формат Anthropic API."""
+        if self.mcp_session is None:
+            return []
+
+        mcp_tools = await self.mcp_session.list_tools()
+
+        tools = [
             {
-                # клиентский (не серверный) инструмент — нужен, чтобы самим
-                # контролировать и обрезать результат до отправки его обратно в API
-                "name": "fetch_webpage",
-                "description": "Загружает содержимое веб-страницы по URL и возвращает её текст.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "url": {"type": "string", "description": "URL страницы для загрузки"}
-                    },
-                    "required": ["url"]
-                },
-                "cache_control": {"type": "ephemeral"}
+                "name": tool.name,
+                "description": tool.description or "",
+                # MCP отдаёт JSON Schema входных параметров — Anthropic ждёт её в input_schema
+                "input_schema": tool.inputSchema,
             }
+            for tool in mcp_tools.tools
         ]
 
-    def _is_safe_url(self, url: str) -> bool:
-        """Блокирует SSRF: только http/https и только публичные адреса (никаких localhost, метадаты облака, локальной сети, file://)."""
-        try:
-            parsed = urlparse(url)
-        except ValueError:
-            return False
-        if parsed.scheme not in ("http", "https") or not parsed.hostname:
-            return False
-        try:
-            addrinfo = socket.getaddrinfo(parsed.hostname, None)
-        except socket.gaierror:
-            return False
-        for *_rest, sockaddr in addrinfo:
-            ip = ipaddress.ip_address(sockaddr[0])
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
-                return False
-        return True
+        # метка кэширования ставится на последний инструмент в списке — кэшируется
+        # весь блок tools целиком, это обязательное условие Prompt Caching
+        if tools:
+            tools[-1]["cache_control"] = {"type": "ephemeral"}
 
-    def _fetch_webpage(self, url: str) -> str:
-        if not self._is_safe_url(url):
-            return f"Запрос заблокирован: небезопасный или внутренний адрес ({url})"
+        return tools
+
+    async def _execute_tool(self, tool_name: str, tool_input: dict) -> str:
+        """Вызывает инструмент через MCP-сессию и жёстко обрезает результат — защита от огромных ответов в контексте."""
+        if self.mcp_session is None:
+            return "MCP-сессия не подключена — вызовите connect_mcp_server()"
+
         try:
-            with urllib.request.urlopen(url, timeout=10) as response:
-                return response.read().decode("utf-8", errors="ignore")
+            result = await self.mcp_session.call_tool(tool_name, tool_input)
         except Exception as e:
-            return f"Ошибка загрузки {url}: {e}"
+            return f"Ошибка вызова инструмента {tool_name}: {e}"
 
-    def _execute_tool(self, tool_name: str, tool_input: dict) -> str:
-        """Выполняет инструмент и жёстко обрезает результат — защита от огромных HTML-портянок в контексте."""
-        if tool_name == "fetch_webpage":
-            result = self._fetch_webpage(tool_input.get("url", ""))
-        else:
-            result = f"Неизвестный инструмент: {tool_name}"
+        # результат MCP — список content-блоков (обычно текстовых), склеиваем их в строку
+        parts = [getattr(block, "text", None) or str(block) for block in result.content]
+        result_text = "\n".join(parts)
+
+        if result.isError:
+            result_text = f"[ОШИБКА ИНСТРУМЕНТА] {result_text}"
 
         max_len = 4000
-        if len(result) > max_len:
-            result = result[:max_len] + "\n...[ТЕКСТ ОБРЕЗАН ДЛЯ ЭКОНОМИИ ТОКЕНОВ]..."
-        return result
+        if len(result_text) > max_len:
+            result_text = result_text[:max_len] + "\n...[ТЕКСТ ОБРЕЗАН ДЛЯ ЭКОНОМИИ ТОКЕНОВ]..."
+        return result_text
 
-    def run(self, user_query: str):
+    async def run(self, user_query: str):
         # сжимаем историю до того, как добавим новый запрос и обратимся к основной модели
-        self._compact_memory()
+        await self._compact_memory()
 
         self.memory.append({"role": "user", "content": user_query})
 
@@ -216,11 +229,11 @@ class AutonomousAgent:
         response = None
         for iteration in range(1, self.max_iterations + 1):
             print(f"Агент думает (шаг {iteration}/{self.max_iterations})...")
-            response = self._create_message(
+            response = await self._create_message(
                 model="claude-opus-4-8",
                 max_tokens=1500,
                 system=system_prompt,
-                tools=self._get_tools(),
+                tools=await self._get_tools(),
                 messages=self.memory
             )
 
@@ -236,11 +249,12 @@ class AutonomousAgent:
             if response.stop_reason != "tool_use":
                 return response
 
-            # модель запросила один или несколько инструментов — выполняем и возвращаем результаты
+            # модель запросила один или несколько инструментов — выполняем их через MCP
+            # и собираем результаты для возврата модели
             tool_results = []
             for block in response.content:
                 if block.type == "tool_use":
-                    result_text = self._execute_tool(block.name, block.input)
+                    result_text = await self._execute_tool(block.name, block.input)
                     tool_results.append({
                         "type": "tool_result",
                         "tool_use_id": block.id,
@@ -249,17 +263,29 @@ class AutonomousAgent:
             self.memory.append({"role": "user", "content": tool_results})
 
             # сжимаем память и внутри цикла — длинная задача не должна раздувать контекст
-            self._compact_memory()
+            await self._compact_memory()
         else:
-            # цикл исчерпал все итерации, не дойдя до финального ответа модели
+            # цикл исчерпал лимит max_iterations, не дойдя до финального ответа модели —
+            # это и есть защита от бесконечного цикла и неконтролируемого расхода бюджета
             print("Достигнут лимит итераций. Остановка для экономии бюджета")
 
         return response
 
 
-if __name__ == "__main__":
+async def main():
     agent = AutonomousAgent(api_key="invalid_test_key")
     try:
-        agent.run("Найди последние новости про ИИ")
+        # пример запуска: реальная команда MCP-сервера передаётся через command/args,
+        # например ("npx", ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"])
+        await agent.connect_mcp_server("python3", ["-m", "mcp_server_example"])
+        await agent.run("Найди последние новости про ИИ")
     except anthropic.APIStatusError as e:
         print(f"Ожидаемая ошибка авторизации (ключ тестовый): {e.status_code}")
+    except Exception as e:
+        print(f"Демо без реального MCP-сервера: {e}")
+    finally:
+        await agent.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
