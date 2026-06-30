@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+
+# рабочая папка агента (зона filesystem MCP-сервера) — файлы агента не коммитим
+agent_workspace/*
+!agent_workspace/.gitkeep

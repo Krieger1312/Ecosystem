@@ -1,9 +1,13 @@
 import asyncio
+import os
 from contextlib import AsyncExitStack
 
 import anthropic
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+
+# рабочая папка filesystem-сервера — единственная зона, куда агенту разрешено писать файлы
+AGENT_WORKSPACE_DIR = "agent_workspace"
 
 
 class AutonomousAgent:
@@ -26,25 +30,53 @@ class AutonomousAgent:
         # суммарный расход токенов за всё время жизни агента (включая сжатие памяти и кэш)
         self.total_tokens_spent = 0
 
-        # сессия MCP-сервера появляется после connect_mcp_server()
-        self.mcp_session: ClientSession | None = None
-        # держит подпроцесс сервера и сессию открытыми между вызовами run()
+        # подключённые MCP-сессии по имени сервера (заполняются через connect_mcp_server())
+        self.mcp_sessions: dict[str, ClientSession] = {}
+        # маршрутизация: имя инструмента -> сессия сервера, который его предоставляет
+        # (пересобирается заново при каждом вызове _get_tools())
+        self._tool_routing: dict[str, ClientSession] = {}
+        # держит подпроцессы серверов и сессии открытыми между вызовами run()
         self._exit_stack = AsyncExitStack()
 
-    async def connect_mcp_server(self, command: str, args: list[str]):
-        """Запускает внешний MCP-сервер как подпроцесс (stdio) и открывает с ним ClientSession."""
-        server_params = StdioServerParameters(command=command, args=args)
+    async def connect_mcp_server(self, name: str, command: str, args: list[str]):
+        """Запускает внешний MCP-сервер как подпроцесс (stdio) и открывает с ним ClientSession.
 
-        # stdio_client поднимает подпроцесс и отдаёт пару потоков чтения/записи
-        read_stream, write_stream = await self._exit_stack.enter_async_context(
-            stdio_client(server_params)
+        Ошибка подключения одного сервера не должна обрушивать всего агента —
+        остальные серверы (и работа агента в целом) должны остаться рабочими.
+        """
+        try:
+            server_params = StdioServerParameters(command=command, args=args)
+
+            # stdio_client поднимает подпроцесс и отдаёт пару потоков чтения/записи
+            read_stream, write_stream = await self._exit_stack.enter_async_context(
+                stdio_client(server_params)
+            )
+            # ClientSession — это и есть протокольный уровень MCP поверх этих потоков
+            session = await self._exit_stack.enter_async_context(
+                ClientSession(read_stream, write_stream)
+            )
+            # обязательное рукопожатие перед тем, как сервером можно пользоваться
+            await session.initialize()
+        except Exception as e:
+            print(f"Не удалось подключить MCP-сервер '{name}' ({command} {' '.join(args)}): {e}")
+            return
+
+        self.mcp_sessions[name] = session
+        print(f"MCP-сервер '{name}' подключён")
+
+    async def connect_default_servers(self):
+        """Подключает два стандартных MCP-сервера агента: fetch (чтение веб-страниц)
+        и filesystem (чтение/запись файлов в изолированной рабочей папке)."""
+        # рабочая папка filesystem-сервера должна существовать до запуска сервера
+        os.makedirs(AGENT_WORKSPACE_DIR, exist_ok=True)
+
+        # официальный fetch-сервер от Anthropic распространяется как пакет PyPI,
+        # а не npm — запускается через uvx, а не через npx
+        await self.connect_mcp_server("fetch", "uvx", ["mcp-server-fetch"])
+
+        await self.connect_mcp_server(
+            "filesystem", "npx", ["-y", "@modelcontextprotocol/server-filesystem", AGENT_WORKSPACE_DIR]
         )
-        # ClientSession — это и есть протокольный уровень MCP поверх этих потоков
-        self.mcp_session = await self._exit_stack.enter_async_context(
-            ClientSession(read_stream, write_stream)
-        )
-        # обязательное рукопожатие перед тем, как сервером можно пользоваться
-        await self.mcp_session.initialize()
 
     async def close(self):
         """Корректно закрывает MCP-сессию и завершает подпроцесс сервера."""
@@ -164,36 +196,39 @@ class AutonomousAgent:
             self.memory = self.memory[:offset] + [{"role": "user", "content": archive_text}] + remaining
 
     async def _get_tools(self) -> list[dict]:
-        """Запрашивает список инструментов у MCP-сервера и конвертирует их в формат Anthropic API."""
-        if self.mcp_session is None:
-            return []
+        """Запрашивает списки инструментов у всех подключённых MCP-серверов и объединяет
+        их в один список в формате Anthropic API. Заодно пересобирает маршрутизацию
+        tool_name -> сессия, которая нужна _execute_tool() для вызова нужного сервера."""
+        self._tool_routing = {}
+        tools: list[dict] = []
 
-        mcp_tools = await self.mcp_session.list_tools()
+        for session in self.mcp_sessions.values():
+            mcp_tools = await session.list_tools()
+            for tool in mcp_tools.tools:
+                tools.append({
+                    "name": tool.name,
+                    "description": tool.description or "",
+                    # MCP отдаёт JSON Schema входных параметров — Anthropic ждёт её в input_schema
+                    "input_schema": tool.inputSchema,
+                })
+                self._tool_routing[tool.name] = session
 
-        tools = [
-            {
-                "name": tool.name,
-                "description": tool.description or "",
-                # MCP отдаёт JSON Schema входных параметров — Anthropic ждёт её в input_schema
-                "input_schema": tool.inputSchema,
-            }
-            for tool in mcp_tools.tools
-        ]
-
-        # метка кэширования ставится на последний инструмент в списке — кэшируется
-        # весь блок tools целиком, это обязательное условие Prompt Caching
+        # метка кэширования ставится на последний инструмент в ОБЪЕДИНЁННОМ списке —
+        # кэшируется весь блок tools целиком, это обязательное условие Prompt Caching
         if tools:
             tools[-1]["cache_control"] = {"type": "ephemeral"}
 
         return tools
 
     async def _execute_tool(self, tool_name: str, tool_input: dict) -> str:
-        """Вызывает инструмент через MCP-сессию и жёстко обрезает результат — защита от огромных ответов в контексте."""
-        if self.mcp_session is None:
-            return "MCP-сессия не подключена — вызовите connect_mcp_server()"
+        """Вызывает инструмент через нужную MCP-сессию (по таблице маршрутизации) и жёстко
+        обрезает результат — защита от огромных ответов в контексте."""
+        session = self._tool_routing.get(tool_name)
+        if session is None:
+            return f"Инструмент '{tool_name}' не найден ни на одном подключённом MCP-сервере"
 
         try:
-            result = await self.mcp_session.call_tool(tool_name, tool_input)
+            result = await session.call_tool(tool_name, tool_input)
         except Exception as e:
             return f"Ошибка вызова инструмента {tool_name}: {e}"
 
@@ -275,9 +310,9 @@ class AutonomousAgent:
 async def main():
     agent = AutonomousAgent(api_key="invalid_test_key")
     try:
-        # пример запуска: реальная команда MCP-сервера передаётся через command/args,
-        # например ("npx", ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"])
-        await agent.connect_mcp_server("python3", ["-m", "mcp_server_example"])
+        # подключаем оба стандартных сервера: fetch (чтение веб-страниц) и
+        # filesystem (чтение/запись в agent_workspace)
+        await agent.connect_default_servers()
         await agent.run("Найди последние новости про ИИ")
     except anthropic.APIStatusError as e:
         print(f"Ожидаемая ошибка авторизации (ключ тестовый): {e.status_code}")
