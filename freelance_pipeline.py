@@ -1,6 +1,8 @@
 import asyncio
+import json
 import os
 import re
+from datetime import datetime, timezone
 
 import anthropic
 
@@ -11,9 +13,13 @@ from agent import AGENT_WORKSPACE_DIR, AutonomousAgent
 PROPOSAL_MODEL = "claude-sonnet-4-6"
 
 PROPOSAL_SYSTEM_PROMPT = (
-    "Ты — опытный фрилансер-разработчик. Напиши короткий, персонализированный, "
-    "цепляющий отклик на этот проект. Без шаблонных фраз. Предложи конкретное "
-    "техническое решение."
+    "Ты — профессиональный веб-разработчик. Проанализируй ТЗ клиента. Если задача "
+    "неадекватная (слишком мало денег или нереальные сроки) — игнорируй её. Если "
+    "задача подходит, напиши короткий, персонализированный отклик. Начинай "
+    "сообщение строго с: «Здравствуйте! Меня зовут Радмир, я изучил вашу "
+    "задачу...». Далее кратко предложи техническое решение (например, "
+    "использование Next.js и Tailwind). Не используй штампы, пиши как живой, "
+    "уверенный в себе специалист."
 )
 
 EXECUTE_SYSTEM_PROMPT = (
@@ -49,6 +55,29 @@ _DEPLOY_URL_RE = re.compile(r"https://\S+\.vercel\.app\S*")
 # подпапка внутри agent_workspace (изолированной зоны filesystem MCP-сервера),
 # куда складываются черновики выполненных заданий
 DONE_PROJECTS_DIR = os.path.join(os.path.abspath(AGENT_WORKSPACE_DIR), "done_projects")
+
+# журнал отправленных откликов — ссылка на проект + текст, который реально ушёл
+SENT_PROPOSALS_LOG_PATH = os.path.join(os.path.abspath(AGENT_WORKSPACE_DIR), "sent_proposals.log")
+
+# биржи фриланса вёрстают форму отклика по-разному — пробуем по очереди самые
+# распространённые селекторы текстового поля и кнопки отправки, вместо того
+# чтобы полагаться на вёрстку одной конкретной площадки
+_PROPOSAL_FIELD_SELECTORS = [
+    "textarea[name*='message' i]",
+    "textarea[placeholder*='отклик' i]",
+    "textarea[placeholder*='сообщ' i]",
+    "textarea[id*='proposal' i]",
+    "textarea[class*='proposal' i]",
+    "[contenteditable='true']",
+    "textarea",
+]
+
+_SUBMIT_BUTTON_SELECTORS = [
+    "button[type='submit']",
+    "button[class*='submit' i]",
+    "button[class*='send' i]",
+    "input[type='submit']",
+]
 
 # инструменты для веб-агентного цикла, которых нет среди MCP-серверов —
 # их реализация находится прямо в FreelanceAgent (см. bootstrap_nextjs_project, deploy_project)
@@ -112,6 +141,36 @@ def _truncate(text: str, max_len: int = 4000) -> str:
     return text
 
 
+def _is_tool_error(result_text: str) -> bool:
+    """Распознаёт обе формы ошибки, которые может вернуть AutonomousAgent._execute_tool:
+    обычный isError-результат MCP (текст с префиксом "[ОШИБКА ИНСТРУМЕНТА]") и
+    транспортное исключение при самом вызове session.call_tool (текст вида "Ошибка
+    вызова инструмента ..." — другой регистр первой буквы), плюс отсутствие
+    инструмента в таблице маршрутизации ("не найден"). Сравнение через .lower(),
+    т.к. эти два случая используют разный регистр и поиск "ОШИБКА" по точному
+    регистру не ловит исключения (баг, из-за которого Dangerous browser arguments
+    от puppeteer_navigate раньше проходил незамеченным)."""
+    lowered = result_text.lower()
+    return "ошибка" in lowered or "не найден" in lowered
+
+
+def _parse_evaluate_result(raw: str) -> dict:
+    """Достаёт JSON-объект, возвращённый JS-скриптом, из текстового ответа
+    puppeteer_evaluate. Формат сервера (выяснен живой проверкой, нигде не
+    документирован): "Execution result:\\n<JSON>\\n\\nConsole output:\\n..."."""
+    if _is_tool_error(raw):
+        return {"ok": False, "error": raw}
+    marker = "Execution result:\n"
+    json_part = raw
+    if marker in raw:
+        json_part = raw.split(marker, 1)[1]
+    json_part = json_part.split("\n\nConsole output:")[0]
+    try:
+        return json.loads(json_part)
+    except (json.JSONDecodeError, ValueError):
+        return {"ok": False, "error": f"Не удалось разобрать ответ puppeteer_evaluate: {raw}"}
+
+
 class FreelanceAgent:
     """Конвейер автоматизации фриланс-биржи: поиск задач -> отклик -> черновое решение.
 
@@ -163,6 +222,99 @@ class FreelanceAgent:
         self._agent._track_usage(response.usage, "Генерация отклика")
         return response.content[0].text
 
+    async def send_proposal(self, url: str, message: str) -> str:
+        """Автономно отправляет отклик на странице заказа через запущенную
+        Puppeteer-сессию: переходит по url, находит поле ввода отклика по списку
+        универсальных CSS-селекторов, печатает текст посимвольно с задержкой ~40мс
+        и нажимает кнопку отправки.
+
+        У MCP-сервера puppeteer нет инструмента, эквивалентного Node-уровневому
+        page.type(selector, message, {delay: 40}) — есть только puppeteer_fill
+        (мгновенная вставка без задержки) и puppeteer_evaluate (произвольный JS
+        в контексте страницы). Печать с задержкой реализована как async JS внутри
+        puppeteer_evaluate: посимвольная вставка через execCommand('insertText')
+        для contenteditable или field.value += ch с диспатчем 'input' для
+        textarea/input, с setTimeout(40мс) между символами.
+        """
+        # --no-sandbox нужен, потому что бот обычно работает в контейнере под root,
+        # где штатный sandbox Chromium запускаться не может; сервер puppeteer считает
+        # такие флаги "опасными" и без allowDangerous=True отклоняет вызов. headless:
+        # True — на сервере без X-дисплея (типичный случай для бота на бэкенде)
+        # headed-режим вообще не запустится
+        nav_result = await self._agent._execute_tool(
+            "puppeteer_navigate",
+            {
+                "url": url,
+                "launchOptions": {
+                    "headless": True,
+                    "args": ["--no-sandbox", "--disable-setuid-sandbox"],
+                },
+                "allowDangerous": True,
+            },
+        )
+        if _is_tool_error(nav_result):
+            raise RuntimeError(f"Не удалось открыть {url}: {nav_result}")
+
+        type_script = f"""
+            (async () => {{
+                const candidates = {json.dumps(_PROPOSAL_FIELD_SELECTORS)};
+                let field = null;
+                for (const sel of candidates) {{
+                    const el = document.querySelector(sel);
+                    if (el && el.offsetParent !== null) {{ field = el; break; }}
+                }}
+                if (!field) return {{ ok: false, error: 'Текстовое поле отклика не найдено' }};
+                field.focus();
+                const text = {json.dumps(message)};
+                const isEditable = field.isContentEditable;
+                for (const ch of text) {{
+                    if (isEditable) {{
+                        document.execCommand('insertText', false, ch);
+                    }} else {{
+                        field.value += ch;
+                        field.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    }}
+                    await new Promise(r => setTimeout(r, 40));
+                }}
+                return {{ ok: true }};
+            }})()
+        """
+        type_raw = await self._agent._execute_tool("puppeteer_evaluate", {"script": type_script})
+        type_result = _parse_evaluate_result(type_raw)
+        if not type_result.get("ok"):
+            raise RuntimeError(f"Не удалось напечатать отклик на {url}: {type_result.get('error', type_raw)}")
+
+        last_click_error = None
+        for selector in _SUBMIT_BUTTON_SELECTORS:
+            click_result = await self._agent._execute_tool("puppeteer_click", {"selector": selector})
+            if not _is_tool_error(click_result):
+                break
+            last_click_error = click_result
+        else:
+            raise RuntimeError(f"Не удалось найти и нажать кнопку отправки на {url}: {last_click_error}")
+
+        await self._log_sent_proposal(url, message)
+        print(f"Отклик отправлен: {url}")
+        return f"Отклик успешно отправлен на {url}"
+
+    async def _log_sent_proposal(self, url: str, message: str) -> None:
+        """Дописывает запись об отправленном отклике в sent_proposals.log (ссылка +
+        текст). MCP filesystem не даёт нативный append — читаем текущее содержимое
+        (если файла ещё нет, read_text_file вернёт ошибку, считаем его пустым) и
+        перезаписываем write_file с добавленной записью."""
+        existing = await self._agent._execute_tool("read_text_file", {"path": SENT_PROPOSALS_LOG_PATH})
+        if _is_tool_error(existing):
+            existing = ""
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        entry = f"[{timestamp}] {url}\n{message}\n{'-' * 40}\n"
+
+        wf_result = await self._agent._execute_tool(
+            "write_file", {"path": SENT_PROPOSALS_LOG_PATH, "content": existing + entry}
+        )
+        if _is_tool_error(wf_result):
+            raise RuntimeError(f"Не удалось записать лог отправленных откликов: {wf_result}")
+
     async def execute_task(self, job_title: str, job_description: str) -> str:
         """Выполняет задачу. Веб-задачи (Next.js/React/сайт) запускают полноценный
         агентный цикл _execute_web_task (каркас -> код -> деплой, с самостоятельным
@@ -190,12 +342,12 @@ class FreelanceAgent:
         # а потом вложенную project_dir; оба вызова идемпотентны
         for directory in (DONE_PROJECTS_DIR, project_dir):
             cd_result = await self._agent._execute_tool("create_directory", {"path": directory})
-            if "ОШИБКА" in cd_result or "не найден" in cd_result:
+            if _is_tool_error(cd_result):
                 raise RuntimeError(f"Не удалось создать {directory}: {cd_result}")
 
         solution_path = os.path.join(project_dir, "solution.md")
         wf_result = await self._agent._execute_tool("write_file", {"path": solution_path, "content": result_text})
-        if "ОШИБКА" in wf_result or "не найден" in wf_result:
+        if _is_tool_error(wf_result):
             raise RuntimeError(f"Не удалось сохранить {solution_path}: {wf_result}")
         print(f"Черновик решения сохранён: {solution_path}")
 
@@ -210,7 +362,7 @@ class FreelanceAgent:
         report_path = os.path.join(project_dir, "report_for_client.txt")
         report_text = f"Ваш проект готов. Вы можете посмотреть его вживую по этой ссылке: {deploy_url}"
         rf_result = await self._agent._execute_tool("write_file", {"path": report_path, "content": report_text})
-        if "ОШИБКА" in rf_result or "не найден" in rf_result:
+        if _is_tool_error(rf_result):
             raise RuntimeError(f"Не удалось сохранить {report_path}: {rf_result}")
         print(f"Отчёт для клиента сохранён: {report_path}")
 
@@ -347,7 +499,7 @@ class FreelanceAgent:
                         is_error = True
                 else:
                     result_text = await self._agent._execute_tool(block.name, block.input)
-                    is_error = result_text.startswith("[ОШИБКА")
+                    is_error = _is_tool_error(result_text)
 
                 tool_result = {"type": "tool_result", "tool_use_id": block.id, "content": result_text}
                 if is_error:
