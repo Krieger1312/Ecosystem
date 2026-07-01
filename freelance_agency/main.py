@@ -1,12 +1,12 @@
-"""Точка входа оркестратора фриланс-бота.
+"""Точка входа фриланс-агента.
 
 Запуск:
-    python orchestrator.py [--interval 300] [--providers habr kwork]
+    python main.py [--interval 300] [--providers habr kwork]
 
 По умолчанию опрашивает все зарегистрированные провайдеры каждые 5 минут.
 Логи пишет в stdout; при желании перенаправь в файл через >> bot.log 2>&1.
 
-Файлы куки должны быть рядом с репозиторием:
+Файлы куки должны лежать рядом с этой папкой:
   cookies_habr.json  — для HabrProvider
   cookies_kwork.json — для KworkProvider
 """
@@ -28,13 +28,12 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# Реестр всех доступных провайдеров — добавь новую платформу сюда
 PROVIDER_REGISTRY = {
     "habr": HabrProvider,
     "kwork": KworkProvider,
 }
 
-DEFAULT_POLL_INTERVAL = 300  # секунд между циклами
+DEFAULT_POLL_INTERVAL = 300
 
 
 def _build_providers(names: list[str], agent: AutonomousAgent):
@@ -52,9 +51,8 @@ def _build_providers(names: list[str], agent: AutonomousAgent):
 async def run(poll_interval: int, provider_names: list[str]) -> None:
     agent = AutonomousAgent()
     try:
-        # подключаем серверы, которые используют провайдеры
-        await agent.connect_default_servers()   # fetch + filesystem + puppeteer
-        await agent._get_tools()                # строим таблицу маршрутизации MCP
+        await agent.connect_default_servers()
+        await agent._get_tools()
 
         providers = _build_providers(provider_names, agent)
         if not providers:

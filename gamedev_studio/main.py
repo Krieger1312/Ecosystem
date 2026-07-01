@@ -4,15 +4,14 @@
   1. get_current_trends()           — получает топ-3 тренда
   2. GameDirectorAgent.analyze_and_route_trend(trend)
                                     — Claude выбирает жанр и тему (clicker /
-                                      runner / falling_objects) и печатает
-                                      обоснование прямо в консоль
+                                      runner / falling_objects / quiz / merge)
   3. build_game(genre, theme)       — подставляет плейсхолдеры в нужный шаблон
   4. zip_game()                     — пакует в .zip для Яндекс.Игр
 
 Запуск:
-  python trend_game_orchestrator.py
-  python trend_game_orchestrator.py --trend "Капибара"
-  python trend_game_orchestrator.py --trend "Хомяк" --output builds/
+  python main.py
+  python main.py --trend "Капибара"
+  python main.py --trend "Хомяк" --output builds/
 """
 import argparse
 import asyncio
@@ -22,7 +21,7 @@ import zipfile
 from pathlib import Path
 
 from trend_analyzer import get_current_trends
-from core.game_director import GameDirectorAgent
+from game_director import GameDirectorAgent
 from tools.image_generator import generate_game_icon
 
 # ── Пути ──────────────────────────────────────────────────────────────────────
@@ -31,12 +30,6 @@ TEMPLATES  = _HERE / "templates"
 OUTPUT_DIR = _HERE / "output"
 
 # ── Конфигурация жанров ────────────────────────────────────────────────────────
-# Для каждого жанра задаём:
-#   js   — шаблон игровой логики
-#   html — шаблон HTML-обёртки
-#   keys — ВСЕ плейсхолдеры {{...}}, которые встречаются в шаблонах жанра
-#           (ключи — имена полей в theme_settings от GameDirectorAgent)
-
 GENRE_CONFIG: dict[str, dict] = {
     "clicker": {
         "js":   TEMPLATES / "clicker_template.js",
@@ -74,7 +67,7 @@ GENRE_CONFIG: dict[str, dict] = {
         "keys": {
             "game_title", "score_label",
             "bg_color", "primary_color", "secondary_color", "accent_color", "text_color",
-            "questions_json",   # сериализуется из questions[]
+            "questions_json",
         },
     },
     "merge": {
@@ -83,7 +76,7 @@ GENRE_CONFIG: dict[str, dict] = {
         "keys": {
             "game_title", "score_label",
             "bg_color", "primary_color", "secondary_color", "accent_color", "text_color",
-            "stages_json",      # сериализуется из stages[]
+            "stages_json",
         },
     },
 }
@@ -94,8 +87,8 @@ GENRE_CONFIG: dict[str, dict] = {
 def _apply(text: str, settings: dict) -> str:
     """Заменяет {{KEY}} → settings[key] (регистр KEY → snake_case в settings)."""
     def replacer(m):
-        key = m.group(1).lower()   # {{GAME_TITLE}} → "game_title"
-        return str(settings.get(key, m.group(0)))   # незнакомый ключ — оставить
+        key = m.group(1).lower()
+        return str(settings.get(key, m.group(0)))
 
     return re.sub(r"\{\{([A-Z0-9_]+)\}\}", replacer, text)
 
@@ -103,8 +96,7 @@ def _apply(text: str, settings: dict) -> str:
 # ── Подготовка сложных полей ─────────────────────────────────────────────────
 
 def _prepare_theme(theme: dict) -> dict:
-    """Добавляет <key>_json-варианты для массивов/словарей, чтобы
-    плейсхолдер {{KEY_JSON}} в шаблоне заменялся готовым JSON-литералом."""
+    """Добавляет <key>_json-варианты для массивов/словарей."""
     result = dict(theme)
     for k, v in theme.items():
         if isinstance(v, (list, dict)):
@@ -119,10 +111,7 @@ def _slugify(name: str) -> str:
 
 
 def build_game(trend: str, genre: str, theme: dict, output_root: Path) -> Path:
-    """Читает шаблоны жанра, подставляет theme и записывает файлы игры.
-
-    Возвращает путь к собранной папке.
-    """
+    """Читает шаблоны жанра, подставляет theme и записывает файлы игры."""
     cfg = GENRE_CONFIG.get(genre)
     if cfg is None:
         print(f"[Build] Неизвестный жанр «{genre}», откат на clicker")
@@ -159,12 +148,7 @@ def zip_game(game_dir: Path) -> Path:
 # ── Главный сценарий ──────────────────────────────────────────────────────────
 
 def run(trend: str | None = None, output_root: Path = OUTPUT_DIR) -> Path:
-    """Полный цикл: тренд → Director → сборка → zip.
-
-    Выводит в консоль лог рассуждений Директора о выборе жанра.
-    Возвращает путь к .zip-архиву.
-    """
-    # 1. Получаем тренд
+    """Полный цикл: тренд → Director → сборка → zip."""
     if trend is None:
         trends = get_current_trends(n=3)
         trend  = trends[0]
@@ -173,7 +157,6 @@ def run(trend: str | None = None, output_root: Path = OUTPUT_DIR) -> Path:
     else:
         print(f"\n[Orchestrator] Используем тренд: «{trend}»\n")
 
-    # 2. GameDirectorAgent решает жанр и тему
     director = GameDirectorAgent()
     decision = director.analyze_and_route_trend(trend)
 
@@ -181,7 +164,6 @@ def run(trend: str | None = None, output_root: Path = OUTPUT_DIR) -> Path:
     theme = decision["theme_settings"]
     just  = decision.get("justification", "—")
 
-    # Итоговый лог решения
     print(f"\n{'='*55}")
     print(f"  ТРЕНД:        {trend}")
     print(f"  ЖАНР:         {genre.upper()}")
@@ -189,10 +171,8 @@ def run(trend: str | None = None, output_root: Path = OUTPUT_DIR) -> Path:
     print(f"  НАЗВАНИЕ:     {theme.get('game_title', '—')}")
     print(f"{'='*55}\n")
 
-    # 3. Сборка игры
     game_dir = build_game(trend, genre, theme, output_root)
 
-    # 4. Генерация иконки (некритично — продолжаем при ошибке)
     icon_prompt = decision.get("icon_prompt", "")
     if icon_prompt:
         try:
@@ -202,7 +182,6 @@ def run(trend: str | None = None, output_root: Path = OUTPUT_DIR) -> Path:
     else:
         print("[Icon] icon_prompt не задан — иконка пропущена")
 
-    # 5. Упаковка
     zip_path = zip_game(game_dir)
 
     print(f"\n✅ Готово! Загружай на Яндекс.Игры: {zip_path}\n")
