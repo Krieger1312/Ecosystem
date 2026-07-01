@@ -2,3 +2,6 @@ anthropic
 mcp
 openai
 requests
+moviepy
+edge-tts
+Pillow
