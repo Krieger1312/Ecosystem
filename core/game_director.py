@@ -11,7 +11,6 @@
 import json
 import os
 import re
-from typing import TYPE_CHECKING
 
 # Claude 3.7 Sonnet отозван — используем актуальную модель того же уровня
 _MODEL = "claude-sonnet-4-6"
@@ -46,8 +45,7 @@ _SCHEMA_CLICKER = """\
   "text_color": "#rrggbb",
   "upgrade_1_name": "...", "upgrade_1_desc": "+1/сек", "upgrade_1_emoji": "...",
   "upgrade_2_name": "...", "upgrade_2_desc": "+8/сек", "upgrade_2_emoji": "...",
-  "upgrade_3_name": "...", "upgrade_3_desc": "+50/сек", "upgrade_3_emoji": "...",
-  "icon_prompt": "flat vector 2D game icon, no text, ..."
+  "upgrade_3_name": "...", "upgrade_3_desc": "+50/сек", "upgrade_3_emoji": "..."
 }"""
 
 _SCHEMA_RUNNER = """\
@@ -61,9 +59,7 @@ _SCHEMA_RUNNER = """\
   "ground_color": "#rrggbb",
   "primary_color": "#rrggbb",
   "accent_color": "#rrggbb",
-  "text_color": "#rrggbb",
-  "secondary_color": "#rrggbb",
-  "icon_prompt": "flat vector 2D game icon, no text, ..."
+  "text_color": "#rrggbb"
 }"""
 
 _SCHEMA_FALLING = """\
@@ -79,8 +75,7 @@ _SCHEMA_FALLING = """\
   "primary_color": "#rrggbb",
   "secondary_color": "#rrggbb",
   "accent_color": "#rrggbb",
-  "text_color": "#rrggbb",
-  "icon_prompt": "flat vector 2D game icon, no text, ..."
+  "text_color": "#rrggbb"
 }"""
 
 _USER_TMPL = """\
@@ -142,14 +137,18 @@ class GameDirectorAgent:
         print(f"[Director] Запрашиваю Claude для тренда «{trend_topic}»...")
         msg = self._client.messages.create(
             model=_MODEL,
-            max_tokens=900,
+            max_tokens=1500,
             system=_DIRECTOR_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = msg.content[0].text.strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$",          "", raw)
-        result = json.loads(raw)
+        try:
+            result = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            print(f"[Director] ⚠ Невалидный JSON от Claude ({exc}), откат на dry-run")
+            return self._dry_run(trend_topic)
 
         genre = result.get("selected_genre", "clicker")
         just  = result.get("justification", "—")

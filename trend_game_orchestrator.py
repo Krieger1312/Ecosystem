@@ -54,7 +54,7 @@ GENRE_CONFIG: dict[str, dict] = {
         "keys": {
             "game_title", "player_emoji", "obstacle_emoji", "collectible_emoji",
             "score_label", "bg_color", "ground_color",
-            "primary_color", "secondary_color", "accent_color", "text_color",
+            "primary_color", "accent_color", "text_color",
         },
     },
     "falling_objects": {
@@ -100,17 +100,15 @@ def build_game(trend: str, genre: str, theme: dict, output_root: Path) -> Path:
     game_dir = output_root / f"{_slugify(trend)}_{genre}"
     game_dir.mkdir(parents=True, exist_ok=True)
 
-    js_src   = cfg["js"].read_text(encoding="utf-8")
-    html_src = cfg["html"].read_text(encoding="utf-8")
+    js_out   = _apply(cfg["js"].read_text(encoding="utf-8"),   theme)
+    html_out = _apply(cfg["html"].read_text(encoding="utf-8"), theme)
 
-    (game_dir / "game.js").write_text(_apply(js_src, theme),   encoding="utf-8")
-    (game_dir / "index.html").write_text(_apply(html_src, theme), encoding="utf-8")
-
-    # проверяем, нет ли незаменённых плейсхолдеров
-    combined = (game_dir / "game.js").read_text() + (game_dir / "index.html").read_text()
-    missed   = re.findall(r"\{\{[A-Z0-9_]+\}\}", combined)
+    missed = re.findall(r"\{\{[A-Z0-9_]+\}\}", js_out + html_out)
     if missed:
         print(f"[Build] ⚠ Незаменённые плейсхолдеры: {sorted(set(missed))}")
+
+    (game_dir / "game.js").write_text(js_out,   encoding="utf-8")
+    (game_dir / "index.html").write_text(html_out, encoding="utf-8")
 
     print(f"[Build] ✓ Игра [{genre}] собрана → {game_dir}")
     return game_dir
