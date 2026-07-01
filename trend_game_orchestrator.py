@@ -16,6 +16,7 @@
 """
 import argparse
 import asyncio
+import json
 import re
 import zipfile
 from pathlib import Path
@@ -67,6 +68,24 @@ GENRE_CONFIG: dict[str, dict] = {
             "bg_color", "primary_color", "secondary_color", "accent_color", "text_color",
         },
     },
+    "quiz": {
+        "js":   TEMPLATES / "quiz_template.js",
+        "html": TEMPLATES / "canvas_index.html",
+        "keys": {
+            "game_title", "score_label",
+            "bg_color", "primary_color", "secondary_color", "accent_color", "text_color",
+            "questions_json",   # сериализуется из questions[]
+        },
+    },
+    "merge": {
+        "js":   TEMPLATES / "merge_template.js",
+        "html": TEMPLATES / "canvas_index.html",
+        "keys": {
+            "game_title", "score_label",
+            "bg_color", "primary_color", "secondary_color", "accent_color", "text_color",
+            "stages_json",      # сериализуется из stages[]
+        },
+    },
 }
 
 
@@ -79,6 +98,18 @@ def _apply(text: str, settings: dict) -> str:
         return str(settings.get(key, m.group(0)))   # незнакомый ключ — оставить
 
     return re.sub(r"\{\{([A-Z0-9_]+)\}\}", replacer, text)
+
+
+# ── Подготовка сложных полей ─────────────────────────────────────────────────
+
+def _prepare_theme(theme: dict) -> dict:
+    """Добавляет <key>_json-варианты для массивов/словарей, чтобы
+    плейсхолдер {{KEY_JSON}} в шаблоне заменялся готовым JSON-литералом."""
+    result = dict(theme)
+    for k, v in theme.items():
+        if isinstance(v, (list, dict)):
+            result[k + "_json"] = json.dumps(v, ensure_ascii=False)
+    return result
 
 
 # ── Сборка ────────────────────────────────────────────────────────────────────
@@ -100,8 +131,9 @@ def build_game(trend: str, genre: str, theme: dict, output_root: Path) -> Path:
     game_dir = output_root / f"{_slugify(trend)}_{genre}"
     game_dir.mkdir(parents=True, exist_ok=True)
 
-    js_out   = _apply(cfg["js"].read_text(encoding="utf-8"),   theme)
-    html_out = _apply(cfg["html"].read_text(encoding="utf-8"), theme)
+    prepared = _prepare_theme(theme)
+    js_out   = _apply(cfg["js"].read_text(encoding="utf-8"),   prepared)
+    html_out = _apply(cfg["html"].read_text(encoding="utf-8"), prepared)
 
     missed = re.findall(r"\{\{[A-Z0-9_]+\}\}", js_out + html_out)
     if missed:
