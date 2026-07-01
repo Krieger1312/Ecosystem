@@ -24,7 +24,10 @@ _DIRECTOR_SYSTEM = """\
 который лучше всего передает эмоции тренда.
 3. Вернуть JSON строгого формата с полями: selected_genre (строка), \
 justification (короткое объяснение выбора), theme_settings \
-(объект с цветами, emoji и названиями для подстановки в шаблон).
+(объект с цветами, emoji и названиями для подстановки в шаблон), \
+icon_prompt (детальное описание на английском для DALL-E 3: сочная, \
+кликабельная 2D-иконка в flat/vector стиле без текста, передающая \
+суть игры и тренда).
 
 Отвечай СТРОГО валидным JSON — без пояснений до или после JSON.
 """
@@ -43,7 +46,8 @@ _SCHEMA_CLICKER = """\
   "text_color": "#rrggbb",
   "upgrade_1_name": "...", "upgrade_1_desc": "+1/сек", "upgrade_1_emoji": "...",
   "upgrade_2_name": "...", "upgrade_2_desc": "+8/сек", "upgrade_2_emoji": "...",
-  "upgrade_3_name": "...", "upgrade_3_desc": "+50/сек", "upgrade_3_emoji": "..."
+  "upgrade_3_name": "...", "upgrade_3_desc": "+50/сек", "upgrade_3_emoji": "...",
+  "icon_prompt": "flat vector 2D game icon, no text, ..."
 }"""
 
 _SCHEMA_RUNNER = """\
@@ -58,7 +62,8 @@ _SCHEMA_RUNNER = """\
   "primary_color": "#rrggbb",
   "accent_color": "#rrggbb",
   "text_color": "#rrggbb",
-  "secondary_color": "#rrggbb"
+  "secondary_color": "#rrggbb",
+  "icon_prompt": "flat vector 2D game icon, no text, ..."
 }"""
 
 _SCHEMA_FALLING = """\
@@ -74,7 +79,8 @@ _SCHEMA_FALLING = """\
   "primary_color": "#rrggbb",
   "secondary_color": "#rrggbb",
   "accent_color": "#rrggbb",
-  "text_color": "#rrggbb"
+  "text_color": "#rrggbb",
+  "icon_prompt": "flat vector 2D game icon, no text, ..."
 }"""
 
 _USER_TMPL = """\
@@ -95,7 +101,8 @@ FALLING_OBJECTS (ловилка) — подходит для трендов пр
 {{
   "selected_genre": "clicker" | "runner" | "falling_objects",
   "justification": "<одно предложение: почему именно этот жанр>",
-  "theme_settings": {{ ... схема выбранного жанра ... }}
+  "theme_settings": {{ ... схема выбранного жанра ... }},
+  "icon_prompt": "<детальное описание на английском для DALL-E 3, без текста, flat/vector стиль>"
 }}
 """
 
@@ -188,10 +195,16 @@ class GameDirectorAgent:
                 "lives_label": "жизни",
             })
 
+        icon_prompts = {
+            "clicker":         "flat vector 2D game icon, cute idle clicker game, colorful coins and upgrade buttons, no text, vibrant colors, mobile game style",
+            "runner":          "flat vector 2D game icon, endless runner game, character jumping over obstacles, dynamic pose, no text, bright cartoon style",
+            "falling_objects": "flat vector 2D game icon, catch falling objects game, basket catching stars, colorful falling items, no text, flat design",
+        }
         return {
             "selected_genre": genre,
             "justification":  just,
             "theme_settings": ts,
+            "icon_prompt":    icon_prompts[genre],
         }
 
     @staticmethod

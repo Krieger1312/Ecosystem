@@ -15,12 +15,14 @@
   python trend_game_orchestrator.py --trend "Хомяк" --output builds/
 """
 import argparse
+import asyncio
 import re
 import zipfile
 from pathlib import Path
 
 from trend_analyzer import get_current_trends
 from core.game_director import GameDirectorAgent
+from tools.image_generator import generate_game_icon
 
 # ── Пути ──────────────────────────────────────────────────────────────────────
 _HERE      = Path(__file__).parent
@@ -160,7 +162,17 @@ def run(trend: str | None = None, output_root: Path = OUTPUT_DIR) -> Path:
     # 3. Сборка игры
     game_dir = build_game(trend, genre, theme, output_root)
 
-    # 4. Упаковка
+    # 4. Генерация иконки (некритично — продолжаем при ошибке)
+    icon_prompt = decision.get("icon_prompt", "")
+    if icon_prompt:
+        try:
+            asyncio.run(generate_game_icon(icon_prompt, game_dir / "icon.png"))
+        except Exception as exc:
+            print(f"[Icon] ⚠ Пропускаем иконку: {exc}")
+    else:
+        print("[Icon] icon_prompt не задан — иконка пропущена")
+
+    # 5. Упаковка
     zip_path = zip_game(game_dir)
 
     print(f"\n✅ Готово! Загружай на Яндекс.Игры: {zip_path}\n")

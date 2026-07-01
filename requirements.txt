@@ -1,2 +1,4 @@
 anthropic
 mcp
+openai
+requests
