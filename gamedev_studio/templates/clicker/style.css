@@ -1,0 +1,193 @@
+/* ============================================================
+   МОНЕТНЫЙ КЛИКЕР — стили
+   Принципы:
+     • Игра занимает весь экран: 100dvh (или 100vh как фоллбэк)
+     • Flexbox-колонка: HUD → кнопка → футер
+     • Единственная тема — тёмно-фиолетовая + золото
+   ============================================================ */
+
+/* ── Сброс и корень ──────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --clr-bg-from:   #0f0c1d;   /* тёмный фиолетовый */
+  --clr-bg-to:     #1a1040;   /* глубокий синий */
+  --clr-gold:      #ffd700;
+  --clr-gold-dim:  #b8981e;
+  --clr-text:      #f0e8ff;   /* почти белый с фиолетовым оттенком */
+  --clr-muted:     #7b6fa0;
+  --clr-overlay:   rgba(10, 7, 30, 0.88);
+
+  --coin-size:     min(42vw, 220px);  /* кнопка-монета: адаптивный размер */
+  --font-main:     system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* ── Тело ────────────────────────────────────────────────── */
+html, body {
+  height: 100%;
+  overflow: hidden;                 /* запрещаем скролл */
+  background: linear-gradient(160deg, var(--clr-bg-from), var(--clr-bg-to));
+  font-family: var(--font-main);
+  color: var(--clr-text);
+  -webkit-tap-highlight-color: transparent; /* убираем синюю вспышку на мобиле */
+}
+
+/* ── Контейнер игры ──────────────────────────────────────── */
+#game-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 100dvh;           /* dynamic viewport height — избегает прыжка в мобильном Safari */
+  height: 100vh;            /* фоллбэк */
+  padding: clamp(12px, 3vw, 28px);
+  user-select: none;        /* не выделяем текст при быстрых кликах */
+}
+
+/* ── HUD ─────────────────────────────────────────────────── */
+#hud {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+#score-block {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+#score-value {
+  font-size: clamp(2.4rem, 10vw, 4.5rem);
+  font-weight: 900;
+  color: var(--clr-gold);
+  /* плавная анимация при изменении числа */
+  transition: transform 0.08s ease-out;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+
+#score-label {
+  font-size: clamp(0.9rem, 3.5vw, 1.4rem);
+  color: var(--clr-muted);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+#per-click-badge {
+  font-size: clamp(0.75rem, 2.8vw, 1rem);
+  color: var(--clr-gold-dim);
+  background: rgba(255, 215, 0, 0.08);
+  border: 1px solid rgba(255, 215, 0, 0.18);
+  border-radius: 999px;
+  padding: 3px 14px;
+}
+
+/* ── Зона клика ──────────────────────────────────────────── */
+#click-zone {
+  flex: 1;                      /* занимает всё свободное пространство */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#coin-btn {
+  /* Убираем стандартный вид кнопки */
+  appearance: none;
+  border: none;
+  background: none;
+  cursor: pointer;
+
+  /* Размер */
+  width:  var(--coin-size);
+  height: var(--coin-size);
+  font-size: calc(var(--coin-size) * 0.62);   /* эмодзи занимает ≈62% кнопки */
+  line-height: var(--coin-size);
+  text-align: center;
+
+  /* Тень и свечение */
+  filter: drop-shadow(0 0 28px rgba(255, 215, 0, 0.45));
+  border-radius: 50%;
+  transition: transform 0.08s ease, filter 0.08s ease;
+  touch-action: manipulation;   /* быстрый отклик на мобиле */
+}
+
+/* Нажатое состояние — анимация сжатия */
+#coin-btn:active,
+#coin-btn.pressed {
+  transform: scale(0.88);
+  filter: drop-shadow(0 0 14px rgba(255, 215, 0, 0.25));
+}
+
+/* Увеличиваем монету при наведении мышью (десктоп) */
+@media (hover: hover) {
+  #coin-btn:hover {
+    transform: scale(1.06);
+    filter: drop-shadow(0 0 38px rgba(255, 215, 0, 0.65));
+  }
+}
+
+/* ── Всплывающий "+N" при клике ──────────────────────────── */
+.float-text {
+  position: absolute;
+  font-size: clamp(1.1rem, 4vw, 1.5rem);
+  font-weight: 700;
+  color: var(--clr-gold);
+  pointer-events: none;
+  animation: floatUp 0.9s ease-out forwards;
+  z-index: 10;
+}
+
+@keyframes floatUp {
+  0%   { opacity: 1; transform: translateY(0)   scale(1); }
+  100% { opacity: 0; transform: translateY(-80px) scale(0.7); }
+}
+
+/* ── Футер ───────────────────────────────────────────────── */
+#game-footer {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: clamp(0.7rem, 2.5vw, 0.9rem);
+  color: var(--clr-muted);
+}
+
+#game-footer strong {
+  color: var(--clr-text);
+}
+
+/* ── Оверлей паузы (реклама) ─────────────────────────────── */
+#ad-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--clr-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(6px);
+  z-index: 100;
+}
+
+/* hidden через атрибут HTML: display: none по умолчанию для [hidden] */
+#ad-overlay[hidden] { display: none; }
+
+#ad-overlay-text {
+  font-size: clamp(1.5rem, 6vw, 2.5rem);
+  font-weight: 700;
+  color: var(--clr-text);
+  letter-spacing: 0.05em;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
