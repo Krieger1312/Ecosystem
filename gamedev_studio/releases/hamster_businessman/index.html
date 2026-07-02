@@ -63,12 +63,27 @@
   <!-- Футер -->
   <footer id="footer">
     <span>Кликов: <b id="click-count">0</b></span>
+    <button id="help-btn" aria-label="Как играть">?</button>
     <span>Реклама через <b id="ad-timer">20</b></span>
   </footer>
 
   <!-- Оверлей паузы (реклама) -->
   <div id="ad-overlay" hidden>
     <p id="overlay-text">⏸ Реклама...</p>
+  </div>
+
+  <!-- Туториал (первый запуск / кнопка «?») -->
+  <div id="tutorial" aria-modal="true" role="dialog" hidden>
+    <div id="tutorial-box">
+      <h2 id="tutorial-title">🐹 Как играть</h2>
+      <ul id="tutorial-steps">
+        <li><span class="t-ico">👆</span><span>Нажимай на хомяка — зарабатывай золотые монеты</span></li>
+        <li><span class="t-ico">🐹</span><span>Найми <b>Хомяков-Стажёров</b> — они приносят монеты автоматически, даже пока ты отдыхаешь</span></li>
+        <li><span class="t-ico">👔</span><span>Купи <b>Деловой Костюм</b> — удваивает монеты за каждый клик</span></li>
+        <li><span class="t-ico">🏆</span><span>Стань <b>Легендой Бизнеса</b> — купи 6 костюмов и достигни вершины карьеры!</span></li>
+      </ul>
+      <button id="tutorial-close">Начать! 🚀</button>
+    </div>
   </div>
 
 </div>

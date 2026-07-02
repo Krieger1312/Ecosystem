@@ -289,6 +289,97 @@ html, body {
 }
 #footer b { color: var(--text); }
 
+/* ── Туториал ───────────────────────────────────────────────── */
+#tutorial {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 3, 24, .88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(6px);
+  z-index: 200;
+}
+#tutorial[hidden] { display: none; }
+
+#tutorial-box {
+  background: linear-gradient(145deg, rgba(30, 12, 65, .98), rgba(14, 25, 80, .98));
+  border: 1px solid rgba(255, 215, 0, .35);
+  border-radius: 22px;
+  padding: clamp(18px, 5vw, 32px) clamp(16px, 5vw, 28px);
+  max-width: min(88vw, 360px);
+  box-shadow: 0 0 60px rgba(255, 200, 0, .18), 0 8px 40px rgba(0, 0, 0, .6);
+  text-align: center;
+}
+
+#tutorial-title {
+  font-size: clamp(1.2rem, 5.5vw, 1.8rem);
+  font-weight: 900;
+  color: var(--gold);
+  margin-bottom: clamp(12px, 3vh, 20px);
+  text-shadow: 0 0 20px rgba(255, 215, 0, .4);
+}
+
+#tutorial-steps {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 2vh, 14px);
+  margin-bottom: clamp(16px, 4vh, 24px);
+  text-align: left;
+}
+
+#tutorial-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: clamp(.73rem, 2.8vw, .95rem);
+  color: rgba(255, 255, 255, .92);
+  line-height: 1.4;
+}
+
+.t-ico {
+  font-size: clamp(1.1rem, 4vw, 1.4rem);
+  flex-shrink: 0;
+  margin-top: -1px;
+}
+
+#tutorial-close {
+  background: var(--btn);
+  border: none;
+  border-radius: 14px;
+  color: #200830;
+  font-weight: 900;
+  font-size: clamp(.85rem, 3.2vw, 1.05rem);
+  padding: clamp(10px, 2.5vw, 14px) clamp(28px, 8vw, 48px);
+  cursor: pointer;
+  transition: transform .12s, box-shadow .15s;
+  box-shadow: 0 4px 18px rgba(255, 150, 0, .5);
+  touch-action: manipulation;
+}
+#tutorial-close:hover  { transform: scale(1.07); box-shadow: 0 6px 28px rgba(255, 150, 0, .7); }
+#tutorial-close:active { transform: scale(.94); }
+
+/* Кнопка «?» в футере */
+#help-btn {
+  background: none;
+  border: 1px solid rgba(255, 215, 0, .3);
+  border-radius: 50%;
+  color: var(--gold2);
+  font-size: clamp(.65rem, 2.2vw, .82rem);
+  font-weight: 800;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  cursor: pointer;
+  line-height: 20px;
+  text-align: center;
+  transition: border-color .15s, color .15s;
+  touch-action: manipulation;
+  flex-shrink: 0;
+}
+#help-btn:hover { border-color: var(--gold); color: var(--gold); }
+
 /* ── Оверлей рекламы ────────────────────────────────────────── */
 #ad-overlay {
   position: absolute;

@@ -45,7 +45,8 @@ const titleText = ()  => TITLES[Math.min(state.suits, TITLES.length - 1)];
 
 // ── Сохранение / загрузка (localStorage) ─────────────────────────────────────
 
-const SAVE_KEY = "hb_save_v1";
+const SAVE_KEY     = "hb_save_v1";
+const TUTORIAL_KEY = "hb_tutorial_v1";
 
 function save() {
   try {
@@ -68,6 +69,20 @@ function load() {
     state.interns     = d.interns     || 0;
     state.suits       = d.suits       || 0;
   } catch (_) {}
+}
+
+// ── Туториал ─────────────────────────────────────────────────────────────────
+
+function showTutorial() {
+  el.tutorial.removeAttribute("hidden");
+  state.isPaused = true;
+}
+
+function hideTutorial() {
+  el.tutorial.setAttribute("hidden", "");
+  state.isPaused = false;
+  state.lastTick = Date.now();
+  try { localStorage.setItem(TUTORIAL_KEY, "1"); } catch (_) {}
 }
 
 // ── Яндекс SDK ────────────────────────────────────────────────────────────────
@@ -250,12 +265,15 @@ window.addEventListener("DOMContentLoaded", () => {
   el.hamWrap      = document.getElementById("hamster-wrap");
   el.levelBadge   = document.getElementById("level-badge");
   el.adOverlay    = document.getElementById("ad-overlay");
-  el.buyInternBtn = document.getElementById("buy-intern");
-  el.buySuitBtn   = document.getElementById("buy-suit");
-  el.internOwned  = document.getElementById("intern-owned");
-  el.suitOwned    = document.getElementById("suit-owned");
-  el.internPrice  = document.getElementById("intern-price");
-  el.suitPrice    = document.getElementById("suit-price");
+  el.buyInternBtn  = document.getElementById("buy-intern");
+  el.buySuitBtn    = document.getElementById("buy-suit");
+  el.internOwned   = document.getElementById("intern-owned");
+  el.suitOwned     = document.getElementById("suit-owned");
+  el.internPrice   = document.getElementById("intern-price");
+  el.suitPrice     = document.getElementById("suit-price");
+  el.tutorial      = document.getElementById("tutorial");
+  el.tutorialClose = document.getElementById("tutorial-close");
+  el.helpBtn       = document.getElementById("help-btn");
 
   // Загружаем прогресс
   load();
@@ -280,6 +298,11 @@ window.addEventListener("DOMContentLoaded", () => {
   // Кнопки магазина
   el.buyInternBtn.addEventListener("click", buyIntern);
   el.buySuitBtn.addEventListener("click",   buySuit);
+
+  // Туториал
+  el.tutorialClose.addEventListener("click", hideTutorial);
+  el.helpBtn.addEventListener("click", showTutorial);
+  if (!localStorage.getItem(TUTORIAL_KEY)) showTutorial();
 
   // Запускаем пассивный доход
   state.lastTick = Date.now();
