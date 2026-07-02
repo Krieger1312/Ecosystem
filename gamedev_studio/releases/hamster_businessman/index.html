@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Хомяк-Бизнесмен</title>
+  <script src="https://yandex.ru/games/sdk/v2"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="gc">
+
+  <!-- HUD -->
+  <header id="hud">
+    <div id="score-row">
+      <span id="coin-icon">🪙</span>
+      <span id="score-val">0</span>
+    </div>
+    <div id="stats-row">
+      <span class="badge">+<span id="per-click">1</span> за клик</span>
+      <span class="badge"><span id="per-sec">0</span>/сек</span>
+    </div>
+  </header>
+
+  <!-- Хомяк -->
+  <main id="click-zone">
+    <div id="hamster-wrap">
+      <div id="level-badge" hidden></div>
+      <button id="hamster-btn" aria-label="Кликай по хомяку!">🐹</button>
+      <div id="business-title">Стажёр-Хомяк</div>
+    </div>
+  </main>
+
+  <!-- Магазин апгрейдов -->
+  <section id="shop">
+
+    <div class="card">
+      <span class="card-ico">🐹</span>
+      <div class="card-body">
+        <div class="card-name">Хомяк-Стажёр</div>
+        <div class="card-desc">+1 монета/сек за каждого</div>
+      </div>
+      <div class="card-right">
+        <div class="card-owned" id="intern-owned">×0</div>
+        <button class="buy-btn" id="buy-intern">🪙 <span id="intern-price">10</span></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="card-ico">👔</span>
+      <div class="card-body">
+        <div class="card-name">Деловой Костюм</div>
+        <div class="card-desc">×2 монеты за клик</div>
+      </div>
+      <div class="card-right">
+        <div class="card-owned" id="suit-owned">×0</div>
+        <button class="buy-btn" id="buy-suit">🪙 <span id="suit-price">50</span></button>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- Футер -->
+  <footer id="footer">
+    <span>Кликов: <b id="click-count">0</b></span>
+    <span>Реклама через <b id="ad-timer">20</b></span>
+  </footer>
+
+  <!-- Оверлей паузы (реклама) -->
+  <div id="ad-overlay" hidden>
+    <p id="overlay-text">⏸ Реклама...</p>
+  </div>
+
+</div>
+<script src="game.js"></script>
+</body>
+</html>

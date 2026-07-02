@@ -1,0 +1,290 @@
+"use strict";
+
+/* ============================================================
+   ХОМЯК-БИЗНЕСМЕН — игровая логика
+   ============================================================ */
+
+// ── Настройки ────────────────────────────────────────────────────────────────
+
+const AD_INTERVAL  = 20;      // кликов между рекламами
+const TICK_MS      = 100;     // мс между тиками пассивного дохода
+const SAVE_MS      = 5_000;   // мс между авто-сохранениями
+
+const INTERN_BASE  = 10;      // базовая цена стажёра (×1.5^n)
+const SUIT_BASE    = 50;      // базовая цена костюма  (×2.0^n)
+
+// Бизнес-титулы хомяка по числу купленных костюмов
+const TITLES = [
+  "Стажёр-Хомяк",
+  "Менеджер-Хомяк",
+  "Директор-Хомяк",
+  "CEO-Хомяк",
+  "Магнат-Хомяк",
+  "Олигарх-Хомяк",
+  "Легенда Бизнеса 🏆",
+];
+
+// ── Состояние игры ────────────────────────────────────────────────────────────
+
+const state = {
+  coins:       0,
+  totalClicks: 0,
+  interns:     0,   // пассивный доход: +1/сек за каждого
+  suits:       0,   // множитель клика: ×2^suits монет за клик
+  isPaused:    false,
+  lastTick:    0,
+};
+
+// ── Расчёт текущих показателей ────────────────────────────────────────────────
+
+const perClick  = ()  => Math.pow(2, state.suits);
+const perSecond = ()  => state.interns;
+const internCost= ()  => Math.floor(INTERN_BASE * Math.pow(1.5, state.interns));
+const suitCost  = ()  => Math.floor(SUIT_BASE   * Math.pow(2.0, state.suits));
+const titleText = ()  => TITLES[Math.min(state.suits, TITLES.length - 1)];
+
+// ── Сохранение / загрузка (localStorage) ─────────────────────────────────────
+
+const SAVE_KEY = "hb_save_v1";
+
+function save() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      coins:       Math.floor(state.coins),
+      totalClicks: state.totalClicks,
+      interns:     state.interns,
+      suits:       state.suits,
+    }));
+  } catch (_) {}
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    state.coins       = d.coins       || 0;
+    state.totalClicks = d.totalClicks || 0;
+    state.interns     = d.interns     || 0;
+    state.suits       = d.suits       || 0;
+  } catch (_) {}
+}
+
+// ── Яндекс SDK ────────────────────────────────────────────────────────────────
+
+YaGames
+  .init()
+  .then(ysdk => {
+    window.ysdk = ysdk;
+    ysdk.features.LoadingAPI?.ready();
+    console.log("[SDK] Яндекс SDK инициализирован");
+  })
+  .catch(err => {
+    console.warn("[SDK] SDK не загрузился (локальная разработка?):", err);
+  });
+
+// ── Реклама ───────────────────────────────────────────────────────────────────
+
+function showAd() {
+  if (!window.ysdk) return;
+  state.isPaused = true;
+  el.adOverlay.removeAttribute("hidden");
+
+  window.ysdk.adv.showFullscreenAdv({
+    callbacks: {
+      onOpen:    ()  => console.log("[Ad] открыта"),
+      onClose:   ()  => resumeGame(),
+      onError:   ()  => resumeGame(),
+      onOffline: ()  => resumeGame(),
+    },
+  });
+}
+
+function resumeGame() {
+  state.isPaused = false;
+  state.lastTick = Date.now();
+  el.adOverlay.setAttribute("hidden", "");
+}
+
+// ── Клик по хомяку ────────────────────────────────────────────────────────────
+
+function handleClick(x, y) {
+  if (state.isPaused) return;
+
+  const earned = perClick();
+  state.coins       += earned;
+  state.totalClicks += 1;
+
+  spawnFloat(`+${fmt(earned)}`, x, y);
+
+  el.hamBtn.classList.add("pressed");
+  setTimeout(() => el.hamBtn.classList.remove("pressed"), 100);
+
+  updateUI();
+  save();
+
+  if (state.totalClicks % AD_INTERVAL === 0) showAd();
+}
+
+// ── Покупки ───────────────────────────────────────────────────────────────────
+
+function buyIntern() {
+  const cost = internCost();
+  if (state.coins < cost) return;
+  state.coins -= cost;
+  state.interns++;
+  updateUI();
+  save();
+}
+
+function buySuit() {
+  const cost = suitCost();
+  if (state.coins < cost) return;
+  state.coins -= cost;
+  state.suits++;
+  applyLevelVisual();
+  updateUI();
+  save();
+}
+
+// ── Пассивный доход (тик) ─────────────────────────────────────────────────────
+
+function tick() {
+  const now = Date.now();
+  if (!state.isPaused && state.interns > 0) {
+    const dt = (now - state.lastTick) / 1000;
+    state.coins += perSecond() * dt;
+    updateUI();
+  }
+  state.lastTick = now;
+}
+
+// ── Форматирование чисел ──────────────────────────────────────────────────────
+
+function fmt(n) {
+  n = Math.floor(n);
+  if (n >= 1_000_000_000) return (n / 1e9).toFixed(1).replace(/\.0$/, "") + "B";
+  if (n >= 1_000_000)     return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
+  if (n >= 1_000)         return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "K";
+  return String(n);
+}
+
+// ── Всплывающий текст ─────────────────────────────────────────────────────────
+
+function spawnFloat(text, x, y) {
+  const div = document.createElement("div");
+  div.className   = "float-text";
+  div.textContent = text;
+  div.style.left  = `${x}px`;
+  div.style.top   = `${y}px`;
+  document.body.appendChild(div);
+  div.addEventListener("animationend", () => div.remove(), { once: true });
+}
+
+// ── Визуальная прогрессия хомяка ──────────────────────────────────────────────
+
+function applyLevelVisual() {
+  const suits = state.suits;
+
+  // Класс уровня на #hamster-wrap (меняет цвет свечения и заголовка)
+  el.hamWrap.className = suits > 0 ? `suit-${Math.min(suits, 4)}` : "";
+
+  // Бейдж с новым титулом (исчезает через 3с)
+  el.levelBadge.textContent = titleText();
+  el.levelBadge.removeAttribute("hidden");
+  clearTimeout(el.levelBadge._t);
+  el.levelBadge._t = setTimeout(
+    () => el.levelBadge.setAttribute("hidden", ""),
+    3000
+  );
+}
+
+// ── Кэш DOM-элементов ────────────────────────────────────────────────────────
+
+const el = {};
+
+// ── Обновление интерфейса ────────────────────────────────────────────────────
+
+function updateUI() {
+  const coins = Math.floor(state.coins);
+
+  // Счётчик монет
+  el.scoreVal.textContent    = fmt(coins);
+  el.scoreVal.style.transform = "scale(1.1)";
+  requestAnimationFrame(() => { el.scoreVal.style.transform = ""; });
+
+  // Бейджи доходности
+  el.perClickEl.textContent  = fmt(perClick());
+  el.perSecEl.textContent    = fmt(perSecond());
+
+  // Бизнес-титул
+  el.titleEl.textContent     = titleText();
+
+  // Футер
+  el.clickCountEl.textContent = fmt(state.totalClicks);
+  el.adTimerEl.textContent    = AD_INTERVAL - (state.totalClicks % AD_INTERVAL);
+
+  // Апгрейды
+  const ic = internCost();
+  const sc = suitCost();
+  el.internOwned.textContent  = `×${state.interns}`;
+  el.suitOwned.textContent    = `×${state.suits}`;
+  el.internPrice.textContent  = fmt(ic);
+  el.suitPrice.textContent    = fmt(sc);
+  el.buyInternBtn.disabled    = coins < ic;
+  el.buySuitBtn.disabled      = coins < sc;
+}
+
+// ── Точка входа ───────────────────────────────────────────────────────────────
+
+window.addEventListener("DOMContentLoaded", () => {
+
+  // Кэшируем элементы
+  el.scoreVal     = document.getElementById("score-val");
+  el.perClickEl   = document.getElementById("per-click");
+  el.perSecEl     = document.getElementById("per-sec");
+  el.titleEl      = document.getElementById("business-title");
+  el.clickCountEl = document.getElementById("click-count");
+  el.adTimerEl    = document.getElementById("ad-timer");
+  el.hamBtn       = document.getElementById("hamster-btn");
+  el.hamWrap      = document.getElementById("hamster-wrap");
+  el.levelBadge   = document.getElementById("level-badge");
+  el.adOverlay    = document.getElementById("ad-overlay");
+  el.buyInternBtn = document.getElementById("buy-intern");
+  el.buySuitBtn   = document.getElementById("buy-suit");
+  el.internOwned  = document.getElementById("intern-owned");
+  el.suitOwned    = document.getElementById("suit-owned");
+  el.internPrice  = document.getElementById("intern-price");
+  el.suitPrice    = document.getElementById("suit-price");
+
+  // Загружаем прогресс
+  load();
+  applyLevelVisual();
+  updateUI();
+
+  // Клик / тап по хомяку
+  el.hamBtn.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    handleClick(e.clientX, e.clientY);
+  });
+
+  // Поддержка клавиатуры (доступность)
+  el.hamBtn.addEventListener("keydown", (e) => {
+    if (e.code === "Enter" || e.code === "Space") {
+      e.preventDefault();
+      const r = el.hamBtn.getBoundingClientRect();
+      handleClick(r.left + r.width / 2, r.top + r.height / 2);
+    }
+  });
+
+  // Кнопки магазина
+  el.buyInternBtn.addEventListener("click", buyIntern);
+  el.buySuitBtn.addEventListener("click",   buySuit);
+
+  // Запускаем пассивный доход
+  state.lastTick = Date.now();
+  setInterval(tick, TICK_MS);
+  setInterval(save, SAVE_MS);
+
+  console.log("[HamsterBiz] 🐹 Игра запущена! Удачи, хомяк.");
+});
