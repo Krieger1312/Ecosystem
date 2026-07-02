@@ -135,6 +135,28 @@ def build_game(trend: str, genre: str, theme: dict, output_root: Path) -> Path:
     return game_dir
 
 
+def save_yandex_meta(decision: dict, game_dir: Path) -> Path:
+    """Сохраняет метаданные для публикации на Яндекс.Играх в yandex_meta.txt."""
+    title       = decision.get("yandex_title", "")
+    description = decision.get("yandex_description", "")
+    tags        = decision.get("yandex_tags", "")
+    category    = decision.get("yandex_category", "")
+
+    lines = [
+        f"Название: {title}",
+        "",
+        f"Описание:\n{description}",
+        "",
+        f"Теги: {tags}",
+        "",
+        f"Категория: {category}",
+    ]
+    meta_path = game_dir / "yandex_meta.txt"
+    meta_path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"[Meta]  ✓ Метаданные сохранены → {meta_path}")
+    return meta_path
+
+
 def zip_game(game_dir: Path) -> Path:
     """Упаковывает папку в .zip. index.html в корне архива — требование Яндекс.Игр."""
     zip_path = game_dir.parent / f"{game_dir.name}.zip"
@@ -182,6 +204,7 @@ def run(trend: str | None = None, output_root: Path = OUTPUT_DIR) -> Path:
     else:
         print("[Icon] icon_prompt не задан — иконка пропущена")
 
+    save_yandex_meta(decision, game_dir)
     zip_path = zip_game(game_dir)
 
     print(f"\n✅ Готово! Загружай на Яндекс.Игры: {zip_path}\n")

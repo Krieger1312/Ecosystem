@@ -34,7 +34,13 @@ justification (короткое объяснение выбора), theme_settin
 (объект со всеми полями выбранного шаблона), \
 icon_prompt (детальное описание на английском для DALL-E 3: сочная, \
 кликабельная 2D-иконка в flat/vector стиле без текста, передающая \
-суть игры и тренда).
+суть игры и тренда), \
+yandex_title (короткое название игры до 40 символов для Яндекс.Игр), \
+yandex_description (маркетинговое описание ровно из 3 предложений для \
+страницы игры в каталоге Яндекс.Игр), \
+yandex_tags (5–7 ключевых слов через запятую для поиска, на русском), \
+yandex_category (одна из стандартных категорий Яндекс.Игр: «Аркады», \
+«Головоломки», «Казуальные», «Карточные», «Стратегии», «Викторины»).
 
 Отвечай СТРОГО валидным JSON — без пояснений до или после JSON.
 """
@@ -144,7 +150,11 @@ MERGE (слияние/эволюция) — рост, развитие, эвол
   "selected_genre": "clicker" | "runner" | "falling_objects" | "quiz" | "merge",
   "justification": "<одно предложение: почему именно этот жанр>",
   "theme_settings": {{ ... схема выбранного жанра ... }},
-  "icon_prompt": "<детальное описание на английском для DALL-E 3, без текста, flat/vector стиль>"
+  "icon_prompt": "<детальное описание на английском для DALL-E 3, без текста, flat/vector стиль>",
+  "yandex_title": "<название игры до 40 символов>",
+  "yandex_description": "<предложение 1>. <предложение 2>. <предложение 3>.",
+  "yandex_tags": "тег1, тег2, тег3, тег4, тег5",
+  "yandex_category": "Аркады" | "Головоломки" | "Казуальные" | "Карточные" | "Стратегии" | "Викторины"
 }}
 """
 
@@ -266,11 +276,43 @@ class GameDirectorAgent:
             "quiz":            "flat vector 2D game icon, trivia quiz game, question mark and lightbulb, bright colorful icons, no text, knowledge theme",
             "merge":           "flat vector 2D game icon, merge evolution game, glowing tiles merging, progression chain, no text, gradient colors",
         }
+        yandex_titles = {
+            "clicker":         f"Кликер «{trend[:20]}»",
+            "runner":          f"Раннер «{trend[:20]}»",
+            "falling_objects": f"Ловилка «{trend[:20]}»",
+            "quiz":            f"Викторина «{trend[:20]}»",
+            "merge":           f"Эволюция «{trend[:20]}»",
+        }
+        yandex_descriptions = {
+            "clicker":         f"Нажимай и зарабатывай — чем больше кликов, тем больше очков! Покупай улучшения и стань богатейшим игроком. Тренд «{trend}» теперь в формате игры!",
+            "runner":          f"Беги сквозь препятствия и собирай бонусы в этом динамичном раннере! Проверь свою реакцию и установи рекорд. Вдохновлён трендом «{trend}»!",
+            "falling_objects": f"Лови нужные предметы и уворачивайся от опасных — быстро и весело! Набирай очки и бей рекорды в этой казуальной игре. Тема игры — «{trend}»!",
+            "quiz":            f"Проверь свои знания в увлекательной викторине на тему «{trend}»! Ответь на 10 вопросов и узнай, насколько ты в теме. Делись результатом с друзьями!",
+            "merge":           f"Объединяй предметы и наблюдай за их эволюцией в этой захватывающей игре! Дойди до финальной стадии и покори таблицу лидеров. Тема — «{trend}»!",
+        }
+        yandex_tags = {
+            "clicker":         f"кликер, идл игра, казуальная, {trend.lower()}, фарм, монеты, улучшения",
+            "runner":          f"раннер, аркада, казуальная, {trend.lower()}, бег, препятствия, рекорд",
+            "falling_objects": f"ловилка, казуальная, аркада, {trend.lower()}, реакция, очки, рефлексы",
+            "quiz":            f"викторина, тест, знания, {trend.lower()}, вопросы, интеллект, обучение",
+            "merge":           f"слияние, эволюция, головоломка, {trend.lower()}, объединение, развитие, стратегия",
+        }
+        yandex_categories = {
+            "clicker":         "Казуальные",
+            "runner":          "Аркады",
+            "falling_objects": "Аркады",
+            "quiz":            "Викторины",
+            "merge":           "Головоломки",
+        }
         return {
-            "selected_genre": genre,
-            "justification":  just,
-            "theme_settings": ts,
-            "icon_prompt":    icon_prompts[genre],
+            "selected_genre":      genre,
+            "justification":       just,
+            "theme_settings":      ts,
+            "icon_prompt":         icon_prompts[genre],
+            "yandex_title":        yandex_titles[genre],
+            "yandex_description":  yandex_descriptions[genre],
+            "yandex_tags":         yandex_tags[genre],
+            "yandex_category":     yandex_categories[genre],
         }
 
     @staticmethod
