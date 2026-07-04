@@ -1,0 +1,40 @@
+{
+  "id": "dragon_investor",
+  "game_title": "Дракон-Инвестор",
+  "character": "🐲",
+  "character_name": "дракона",
+  "currency_icon": "💎",
+  "currency_name": "кристаллов",
+  "save_key": "di_save_v1",
+  "colors": {
+    "bg1": "#0d1a0a",
+    "bg2": "#0a2510",
+    "accent": "#69F0AE",
+    "accent2": "#00E676"
+  },
+  "titles": [
+    "Дракончик-Стажёр",
+    "Дракон-Трейдер",
+    "Дракон-Директор",
+    "CEO-Дракон",
+    "Дракон-Магнат",
+    "Дракон-Олигарх",
+    "Повелитель Кристаллов 🏆"
+  ],
+  "upgrade1": {
+    "name": "Дракончик-Майнер",
+    "desc": "+1 кристалл/сек за каждого",
+    "icon": "⛏️"
+  },
+  "upgrade2": {
+    "name": "Золотые Когти",
+    "desc": "×2 кристалла за клик",
+    "icon": "✨"
+  },
+  "yandex": {
+    "description": "Нажимай на дракона и добывай сверкающие кристаллы! Нанимай дракончиков-майнеров для автоматической добычи и прокачай золотые когти, чтобы удвоить добычу за клик. Стань Повелителем Кристаллов!",
+    "tags": "дракон, кристаллы, кликер, майнинг, казуальная игра, идл, фэнтези",
+    "category": "Казуальные",
+    "icon_prompt": "3D cartoon game icon, extremely cute chubby green dragon holding shiny crystal, big sparkling eyes, small wings, sitting on pile of gems, rich green and teal color palette, dark background, mobile game icon style, soft 3D render"
+  }
+}

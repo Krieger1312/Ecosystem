@@ -1,0 +1,40 @@
+{
+  "id": "unicorn_startup",
+  "game_title": "Единорог-Стартапер",
+  "character": "🦄",
+  "character_name": "единорога",
+  "currency_icon": "⭐",
+  "currency_name": "звёзд",
+  "save_key": "us_save_v1",
+  "colors": {
+    "bg1": "#1a0828",
+    "bg2": "#2a0a40",
+    "accent": "#E040FB",
+    "accent2": "#CE93D8"
+  },
+  "titles": [
+    "Единорожек-Стажёр",
+    "Единорог-Джуниор",
+    "Единорог-Сеньор",
+    "CTO-Единорог",
+    "Единорог-Основатель",
+    "Единорог-Миллиардер",
+    "Легенда Стартапов 🏆"
+  ],
+  "upgrade1": {
+    "name": "Единорожек-Разраб",
+    "desc": "+1 звезда/сек за каждого",
+    "icon": "💻"
+  },
+  "upgrade2": {
+    "name": "Радужный Рог",
+    "desc": "×2 звезды за клик",
+    "icon": "🌈"
+  },
+  "yandex": {
+    "description": "Нажимай на единорога и запускай звёздные стартапы! Нанимай единорожков-разработчиков для пассивного дохода и прокачай радужный рог, чтобы удвоить звёзды за клик. Стань Легендой Стартапов!",
+    "tags": "единорог, стартап, кликер, звёзды, казуальная игра, идл, tech",
+    "category": "Казуальные",
+    "icon_prompt": "3D cartoon game icon, extremely cute chubby unicorn with rainbow horn, wearing tiny hoodie, surrounded by golden stars, big sparkling eyes, vibrant purple and pink color palette, dark gradient background, mobile game icon style, soft 3D render"
+  }
+}

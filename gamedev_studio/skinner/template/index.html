@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>{{GAME_TITLE}}</title>
+  <script src="https://yandex.ru/games/sdk/v2"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="gc">
+
+  <header id="hud">
+    <div id="score-row">
+      <span id="coin-icon">{{CURRENCY_ICON}}</span>
+      <span id="score-val">0</span>
+    </div>
+    <div id="stats-row">
+      <span class="badge">+<span id="per-click">1</span> за клик</span>
+      <span class="badge"><span id="per-sec">0</span>/сек</span>
+      <span class="badge boost-badge" id="boost-badge" hidden>⚡ ×2 <span id="boost-timer">60</span>с</span>
+    </div>
+  </header>
+
+  <main id="click-zone">
+    <div id="hamster-wrap">
+      <div id="level-badge" hidden></div>
+      <button id="hamster-btn" aria-label="Нажми!">{{CHARACTER}}</button>
+      <div id="business-title">{{TITLE_0}}</div>
+    </div>
+  </main>
+
+  <section id="shop">
+    <div class="card">
+      <span class="card-ico">{{UPG1_ICON}}</span>
+      <div class="card-body">
+        <div class="card-name">{{UPG1_NAME}}</div>
+        <div class="card-desc">{{UPG1_DESC}}</div>
+      </div>
+      <div class="card-right">
+        <div class="card-owned" id="intern-owned">×0</div>
+        <button class="buy-btn" id="buy-intern">{{CURRENCY_ICON}} <span id="intern-price">10</span></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="card-ico">{{UPG2_ICON}}</span>
+      <div class="card-body">
+        <div class="card-name">{{UPG2_NAME}}</div>
+        <div class="card-desc">{{UPG2_DESC}}</div>
+      </div>
+      <div class="card-right">
+        <div class="card-owned" id="suit-owned">×0</div>
+        <button class="buy-btn" id="buy-suit">{{CURRENCY_ICON}} <span id="suit-price">50</span></button>
+      </div>
+    </div>
+
+    <div class="card card-reward">
+      <span class="card-ico">📺</span>
+      <div class="card-body">
+        <div class="card-name">Бонус-реклама</div>
+        <div class="card-desc" id="reward-desc">×2 за клик на 60 сек</div>
+      </div>
+      <div class="card-right">
+        <button class="buy-btn reward-btn" id="buy-reward">Смотреть</button>
+      </div>
+    </div>
+  </section>
+
+  <footer id="footer">
+    <span>Кликов: <b id="click-count">0</b></span>
+    <button id="help-btn" aria-label="Как играть">?</button>
+    <span>Реклама через <b id="ad-timer">15</b></span>
+  </footer>
+
+  <div id="ad-overlay" hidden>
+    <p id="overlay-text">⏸ Реклама...</p>
+  </div>
+
+  <div id="daily-overlay" aria-modal="true" role="dialog" hidden>
+    <div id="daily-box">
+      <div id="daily-icon">🎁</div>
+      <h2 id="daily-title">Ежедневный бонус!</h2>
+      <div id="daily-amount">+<span id="daily-coins">0</span> {{CURRENCY_ICON}}</div>
+      <p id="daily-sub">Возвращайся завтра за новым бонусом</p>
+      <button id="daily-close">Забрать!</button>
+    </div>
+  </div>
+
+  <div id="tutorial" aria-modal="true" role="dialog" hidden>
+    <div id="tutorial-box">
+      <h2 id="tutorial-title">{{CHARACTER}} Как играть</h2>
+      <ul id="tutorial-steps">
+        <li><span class="t-ico">👆</span><span>Нажимай на {{CHARACTER_NAME}} — зарабатывай {{CURRENCY_NAME}}</span></li>
+        <li><span class="t-ico">{{UPG1_ICON}}</span><span>Найми <b>{{UPG1_NAME}}</b> — автоматический доход, пока ты отдыхаешь</span></li>
+        <li><span class="t-ico">{{UPG2_ICON}}</span><span>Купи <b>{{UPG2_NAME}}</b> — удваивает доход за клик</span></li>
+        <li><span class="t-ico">🏆</span><span>Стань <b>{{TITLE_MAX}}</b> — купи 6 улучшений!</span></li>
+      </ul>
+      <button id="tutorial-close">Начать! 🚀</button>
+    </div>
+  </div>
+
+</div>
+<script src="skin.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

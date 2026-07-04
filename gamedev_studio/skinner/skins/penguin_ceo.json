@@ -1,0 +1,40 @@
+{
+  "id": "penguin_ceo",
+  "game_title": "Пингвин-CEO",
+  "character": "🐧",
+  "character_name": "пингвина",
+  "currency_icon": "🧊",
+  "currency_name": "льдинок",
+  "save_key": "pc_save_v1",
+  "colors": {
+    "bg1": "#030d1a",
+    "bg2": "#061428",
+    "accent": "#B3E5FC",
+    "accent2": "#81D4FA"
+  },
+  "titles": [
+    "Пингвинёнок",
+    "Пингвин-Менеджер",
+    "Директор-Пингвин",
+    "CEO-Пингвин",
+    "Пингвин-Магнат",
+    "Пингвин-Олигарх",
+    "Ледяной Барон 🏆"
+  ],
+  "upgrade1": {
+    "name": "Пингвинёнок-Курьер",
+    "desc": "+1 льдинка/сек за каждого",
+    "icon": "📦"
+  },
+  "upgrade2": {
+    "name": "Смокинг от Армани",
+    "desc": "×2 льдинки за клик",
+    "icon": "🎩"
+  },
+  "yandex": {
+    "description": "Нажимай на важного пингвина в смокинге и собирай ледяные кристаллы! Нанимай пингвинят-курьеров для автодохода и купи смокинг от Армани, чтобы удвоить прибыль за клик. Стань Ледяным Бароном!",
+    "tags": "пингвин, лёд, кликер, смокинг, казуальная игра, идл, арктика",
+    "category": "Казуальные",
+    "icon_prompt": "3D cartoon game icon, extremely cute chubby penguin wearing elegant tuxedo, holding ice crystal, big round eyes, pale blue and white color palette, dark arctic background, mobile game icon style, soft 3D render"
+  }
+}

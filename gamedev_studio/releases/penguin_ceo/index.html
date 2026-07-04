@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Пингвин-CEO</title>
+  <script src="https://yandex.ru/games/sdk/v2"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="gc">
+
+  <header id="hud">
+    <div id="score-row">
+      <span id="coin-icon">🧊</span>
+      <span id="score-val">0</span>
+    </div>
+    <div id="stats-row">
+      <span class="badge">+<span id="per-click">1</span> за клик</span>
+      <span class="badge"><span id="per-sec">0</span>/сек</span>
+      <span class="badge boost-badge" id="boost-badge" hidden>⚡ ×2 <span id="boost-timer">60</span>с</span>
+    </div>
+  </header>
+
+  <main id="click-zone">
+    <div id="hamster-wrap">
+      <div id="level-badge" hidden></div>
+      <button id="hamster-btn" aria-label="Нажми!">🐧</button>
+      <div id="business-title">Пингвинёнок</div>
+    </div>
+  </main>
+
+  <section id="shop">
+    <div class="card">
+      <span class="card-ico">📦</span>
+      <div class="card-body">
+        <div class="card-name">Пингвинёнок-Курьер</div>
+        <div class="card-desc">+1 льдинка/сек за каждого</div>
+      </div>
+      <div class="card-right">
+        <div class="card-owned" id="intern-owned">×0</div>
+        <button class="buy-btn" id="buy-intern">🧊 <span id="intern-price">10</span></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="card-ico">🎩</span>
+      <div class="card-body">
+        <div class="card-name">Смокинг от Армани</div>
+        <div class="card-desc">×2 льдинки за клик</div>
+      </div>
+      <div class="card-right">
+        <div class="card-owned" id="suit-owned">×0</div>
+        <button class="buy-btn" id="buy-suit">🧊 <span id="suit-price">50</span></button>
+      </div>
+    </div>
+
+    <div class="card card-reward">
+      <span class="card-ico">📺</span>
+      <div class="card-body">
+        <div class="card-name">Бонус-реклама</div>
+        <div class="card-desc" id="reward-desc">×2 за клик на 60 сек</div>
+      </div>
+      <div class="card-right">
+        <button class="buy-btn reward-btn" id="buy-reward">Смотреть</button>
+      </div>
+    </div>
+  </section>
+
+  <footer id="footer">
+    <span>Кликов: <b id="click-count">0</b></span>
+    <button id="help-btn" aria-label="Как играть">?</button>
+    <span>Реклама через <b id="ad-timer">15</b></span>
+  </footer>
+
+  <div id="ad-overlay" hidden>
+    <p id="overlay-text">⏸ Реклама...</p>
+  </div>
+
+  <div id="daily-overlay" aria-modal="true" role="dialog" hidden>
+    <div id="daily-box">
+      <div id="daily-icon">🎁</div>
+      <h2 id="daily-title">Ежедневный бонус!</h2>
+      <div id="daily-amount">+<span id="daily-coins">0</span> 🧊</div>
+      <p id="daily-sub">Возвращайся завтра за новым бонусом</p>
+      <button id="daily-close">Забрать!</button>
+    </div>
+  </div>
+
+  <div id="tutorial" aria-modal="true" role="dialog" hidden>
+    <div id="tutorial-box">
+      <h2 id="tutorial-title">🐧 Как играть</h2>
+      <ul id="tutorial-steps">
+        <li><span class="t-ico">👆</span><span>Нажимай на пингвина — зарабатывай льдинок</span></li>
+        <li><span class="t-ico">📦</span><span>Найми <b>Пингвинёнок-Курьер</b> — автоматический доход, пока ты отдыхаешь</span></li>
+        <li><span class="t-ico">🎩</span><span>Купи <b>Смокинг от Армани</b> — удваивает доход за клик</span></li>
+        <li><span class="t-ico">🏆</span><span>Стань <b>Ледяной Барон 🏆</b> — купи 6 улучшений!</span></li>
+      </ul>
+      <button id="tutorial-close">Начать! 🚀</button>
+    </div>
+  </div>
+
+</div>
+<script src="skin.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

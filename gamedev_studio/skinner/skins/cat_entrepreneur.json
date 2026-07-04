@@ -1,0 +1,40 @@
+{
+  "id": "cat_entrepreneur",
+  "game_title": "Кот-Предприниматель",
+  "character": "🐱",
+  "character_name": "кота",
+  "currency_icon": "🐟",
+  "currency_name": "рыбок",
+  "save_key": "ce_save_v1",
+  "colors": {
+    "bg1": "#0a1a2e",
+    "bg2": "#0d2140",
+    "accent": "#4FC3F7",
+    "accent2": "#81D4FA"
+  },
+  "titles": [
+    "Котёнок-Стажёр",
+    "Кот-Менеджер",
+    "Директор-Кот",
+    "CEO-Кот",
+    "Кот-Магнат",
+    "Кот-Олигарх",
+    "Легенда Котизма 🏆"
+  ],
+  "upgrade1": {
+    "name": "Котик-Помощник",
+    "desc": "+1 рыбка/сек за каждого",
+    "icon": "🐾"
+  },
+  "upgrade2": {
+    "name": "Шёлковый Бантик",
+    "desc": "×2 рыбки за клик",
+    "icon": "🎀"
+  },
+  "yandex": {
+    "description": "Нажимай на пушистого кота и зарабатывай рыбку! Нанимай котиков-помощников для автоматического дохода и покупай шёлковые бантики, чтобы удвоить монеты за каждый клик. Стань настоящей Легендой Котизма!",
+    "tags": "кот, бизнес, кликер, рыбка, казуальная игра, идл, котики",
+    "category": "Казуальные",
+    "icon_prompt": "3D cartoon game icon, extremely cute fluffy blue-grey cat in a tiny business suit, sitting on a pile of shiny fish, big sparkling eyes, fat rosy cheeks, blue-white color palette, mobile game icon style, soft 3D render"
+  }
+}
