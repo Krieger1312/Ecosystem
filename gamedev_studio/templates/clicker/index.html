@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Запрещаем масштабирование — игра сама адаптируется -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Монетный Кликер</title>
+
+  <!-- Яндекс.Игры SDK v2 — обязательно до game.js -->
+  <script src="https://yandex.ru/games/sdk/v2"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Корневой контейнер игры: flex-колонка, 100vw × 100vh -->
+  <div id="game-container">
+
+    <!-- Верхний HUD: очки и пассивный доход -->
+    <header id="hud">
+      <div id="score-block">
+        <span id="score-value">0</span>
+        <span id="score-label">монет</span>
+      </div>
+      <div id="per-click-badge">+<span id="per-click-val">1</span> за клик</div>
+    </header>
+
+    <!-- Зона клика: кнопка с эмодзи по центру экрана -->
+    <main id="click-zone">
+      <button id="coin-btn" aria-label="Нажми для получения монет">💰</button>
+    </main>
+
+    <!-- Нижняя строка: счётчик кликов и обратный отсчёт до рекламы -->
+    <footer id="game-footer">
+      <span id="total-clicks-label">Кликов: <strong id="total-clicks">0</strong></span>
+      <span id="ad-hint">Реклама через <strong id="ad-countdown">20</strong></span>
+    </footer>
+
+    <!-- Оверлей-паузы во время показа рекламы -->
+    <div id="ad-overlay" hidden>
+      <div id="ad-overlay-text">⏸ Пауза</div>
+    </div>
+
+  </div><!-- /#game-container -->
+
+  <script src="game.js"></script>
+</body>
+</html>
