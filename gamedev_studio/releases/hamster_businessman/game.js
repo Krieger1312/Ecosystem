@@ -6,9 +6,10 @@
 
 // ── Настройки ────────────────────────────────────────────────────────────────
 
-const AD_INTERVAL  = 20;      // кликов между рекламами
-const TICK_MS      = 100;     // мс между тиками пассивного дохода
-const SAVE_MS      = 5_000;   // мс между авто-сохранениями
+const AD_INTERVAL   = 15;      // кликов между рекламами (оптимизировано)
+const TICK_MS       = 100;     // мс между тиками пассивного дохода
+const SAVE_MS       = 5_000;   // мс между авто-сохранениями
+const BOOST_MS      = 60_000;  // длительность бонуса от rewarded ad
 
 const INTERN_BASE  = 10;      // базовая цена стажёра (×1.5^n)
 const SUIT_BASE    = 50;      // базовая цена костюма  (×2.0^n)
@@ -27,17 +28,19 @@ const TITLES = [
 // ── Состояние игры ────────────────────────────────────────────────────────────
 
 const state = {
-  coins:       0,
-  totalClicks: 0,
-  interns:     0,   // пассивный доход: +1/сек за каждого
-  suits:       0,   // множитель клика: ×2^suits монет за клик
-  isPaused:    false,
-  lastTick:    0,
+  coins:        0,
+  totalClicks:  0,
+  interns:      0,
+  suits:        0,
+  isPaused:     false,
+  lastTick:     0,
+  boostActive:  false,
+  boostEnd:     0,
 };
 
 // ── Расчёт текущих показателей ────────────────────────────────────────────────
 
-const perClick  = ()  => Math.pow(2, state.suits);
+const perClick  = ()  => Math.pow(2, state.suits) * (state.boostActive ? 2 : 1);
 const perSecond = ()  => state.interns;
 const internCost= ()  => Math.floor(INTERN_BASE * Math.pow(1.5, state.interns));
 const suitCost  = ()  => Math.floor(SUIT_BASE   * Math.pow(2.0, state.suits));
@@ -47,6 +50,7 @@ const titleText = ()  => TITLES[Math.min(state.suits, TITLES.length - 1)];
 
 const SAVE_KEY     = "hb_save_v1";
 const TUTORIAL_KEY = "hb_tutorial_v1";
+const DAILY_KEY    = "hb_daily_v1";
 
 function save() {
   try {
@@ -69,6 +73,70 @@ function load() {
     state.interns     = d.interns     || 0;
     state.suits       = d.suits       || 0;
   } catch (_) {}
+}
+
+// ── Rewarded ad (boost ×2 на 60 сек) ─────────────────────────────────────────
+
+let boostInterval = null;
+
+function activateBoost() {
+  state.boostActive = true;
+  state.boostEnd = Date.now() + BOOST_MS;
+  el.rewardBtn.disabled = true;
+  el.boostBadge.removeAttribute("hidden");
+  clearInterval(boostInterval);
+  boostInterval = setInterval(() => {
+    const left = Math.ceil((state.boostEnd - Date.now()) / 1000);
+    if (left <= 0) {
+      state.boostActive = false;
+      el.boostBadge.setAttribute("hidden", "");
+      el.rewardBtn.disabled = false;
+      el.rewardDesc.textContent = "×2 монеты/клик на 60 сек";
+      clearInterval(boostInterval);
+    } else {
+      el.boostTimerEl.textContent = left;
+      el.rewardDesc.textContent   = `⚡ Буст активен ещё ${left} сек`;
+    }
+    updateUI();
+  }, 500);
+}
+
+function showRewardedAd() {
+  if (state.boostActive) return;
+  if (!window.ysdk) {
+    activateBoost();
+    return;
+  }
+  state.isPaused = true;
+  window.ysdk.adv.showRewardedVideo({
+    callbacks: {
+      onRewarded: ()  => activateBoost(),
+      onClose:    ()  => { state.isPaused = false; state.lastTick = Date.now(); },
+      onError:    ()  => { state.isPaused = false; state.lastTick = Date.now(); },
+    },
+  });
+}
+
+// ── Ежедневный бонус ──────────────────────────────────────────────────────────
+
+function checkDailyBonus() {
+  const today = new Date().toDateString();
+  if (localStorage.getItem(DAILY_KEY) === today) return;
+  const bonus = Math.max(50, (state.interns * 30) + (state.suits * 80) + 50);
+  state.coins += bonus;
+  localStorage.setItem(DAILY_KEY, today);
+  el.dailyCoinsEl.textContent = fmt(bonus);
+  el.dailyOverlay.removeAttribute("hidden");
+  state.isPaused = true;
+}
+
+function closeDailyBonus() {
+  el.dailyOverlay.setAttribute("hidden", "");
+  state.isPaused = false;
+  state.lastTick = Date.now();
+  updateUI();
+  save();
+  if (!localStorage.getItem(TUTORIAL_KEY)) showTutorial();
 }
 
 // ── Туториал ─────────────────────────────────────────────────────────────────
@@ -274,6 +342,13 @@ window.addEventListener("DOMContentLoaded", () => {
   el.tutorial      = document.getElementById("tutorial");
   el.tutorialClose = document.getElementById("tutorial-close");
   el.helpBtn       = document.getElementById("help-btn");
+  el.rewardBtn     = document.getElementById("buy-reward");
+  el.rewardDesc    = document.getElementById("reward-desc");
+  el.boostBadge    = document.getElementById("boost-badge");
+  el.boostTimerEl  = document.getElementById("boost-timer");
+  el.dailyOverlay  = document.getElementById("daily-overlay");
+  el.dailyCoinsEl  = document.getElementById("daily-coins");
+  el.dailyClose    = document.getElementById("daily-close");
 
   // Загружаем прогресс
   load();
@@ -302,7 +377,14 @@ window.addEventListener("DOMContentLoaded", () => {
   // Туториал
   el.tutorialClose.addEventListener("click", hideTutorial);
   el.helpBtn.addEventListener("click", showTutorial);
-  if (!localStorage.getItem(TUTORIAL_KEY)) showTutorial();
+  el.rewardBtn.addEventListener("click", showRewardedAd);
+  el.dailyClose.addEventListener("click", closeDailyBonus);
+
+  // Ежедневный бонус при первом запуске сессии (до туториала)
+  checkDailyBonus();
+  if (el.dailyOverlay.hasAttribute("hidden") && !localStorage.getItem(TUTORIAL_KEY)) {
+    showTutorial();
+  }
 
   // Запускаем пассивный доход
   state.lastTick = Date.now();

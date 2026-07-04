@@ -289,6 +289,105 @@ html, body {
 }
 #footer b { color: var(--text); }
 
+/* ── Boost badge ────────────────────────────────────────────── */
+.boost-badge {
+  color: #fff !important;
+  background: linear-gradient(135deg, rgba(255,71,87,.3), rgba(255,107,53,.2)) !important;
+  border-color: rgba(255,90,50,.5) !important;
+  animation: boostPulse 1s ease-in-out infinite;
+}
+@keyframes boostPulse {
+  0%,100% { box-shadow: none; }
+  50%     { box-shadow: 0 0 12px rgba(255,80,50,.6); }
+}
+
+/* ── Reward card ─────────────────────────────────────────────── */
+.card-reward {
+  border-color: rgba(255,215,0,.28) !important;
+  background: rgba(255,215,0,.05) !important;
+}
+.reward-btn {
+  background: linear-gradient(135deg, #7B2FBE, #C850C0) !important;
+  box-shadow: 0 3px 12px rgba(200,80,192,.4) !important;
+}
+.reward-btn:hover:not(:disabled) { box-shadow: 0 5px 20px rgba(200,80,192,.6) !important; }
+.reward-btn:disabled { opacity:.38 !important; }
+
+/* ── Daily bonus overlay ─────────────────────────────────────── */
+#daily-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(8,3,24,.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(6px);
+  z-index: 210;
+}
+#daily-overlay[hidden] { display:none; }
+
+#daily-box {
+  background: linear-gradient(145deg, rgba(25,10,58,.98), rgba(12,20,70,.98));
+  border: 1px solid rgba(255,215,0,.4);
+  border-radius: 22px;
+  padding: clamp(20px,5vw,34px) clamp(18px,5vw,30px);
+  max-width: min(88vw,340px);
+  text-align: center;
+  box-shadow: 0 0 80px rgba(255,215,0,.15), 0 8px 40px rgba(0,0,0,.6);
+  animation: dailyPop .4s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes dailyPop { from{transform:scale(.6);opacity:0} to{transform:scale(1);opacity:1} }
+
+#daily-icon {
+  font-size: clamp(2.4rem,10vw,4rem);
+  animation: giftWiggle 1.2s ease-in-out infinite;
+  display: block;
+  margin-bottom: 8px;
+}
+@keyframes giftWiggle {
+  0%,100% { transform:rotate(-8deg); }
+  50%     { transform:rotate(8deg); }
+}
+
+#daily-title {
+  font-size: clamp(1.1rem,4.5vw,1.5rem);
+  font-weight: 900;
+  color: var(--gold);
+  margin-bottom: 10px;
+  text-shadow: 0 0 18px rgba(255,215,0,.4);
+}
+
+#daily-amount {
+  font-size: clamp(1.8rem,7vw,3rem);
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 0 24px rgba(255,215,0,.5);
+  margin-bottom: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+#daily-sub {
+  font-size: clamp(.62rem,2.2vw,.8rem);
+  color: var(--muted);
+  margin-bottom: clamp(14px,3vh,20px);
+}
+
+#daily-close {
+  background: var(--btn);
+  border: none;
+  border-radius: 14px;
+  color: #200830;
+  font-weight: 900;
+  font-size: clamp(.85rem,3.2vw,1.05rem);
+  padding: clamp(10px,2.5vw,14px) clamp(28px,8vw,48px);
+  cursor: pointer;
+  transition: transform .12s, box-shadow .15s;
+  box-shadow: 0 4px 18px rgba(255,150,0,.5);
+  touch-action: manipulation;
+}
+#daily-close:hover  { transform:scale(1.07); box-shadow:0 6px 28px rgba(255,150,0,.7); }
+#daily-close:active { transform:scale(.94); }
+
 /* ── Туториал ───────────────────────────────────────────────── */
 #tutorial {
   position: absolute;

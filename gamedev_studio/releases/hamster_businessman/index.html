@@ -19,6 +19,7 @@
     <div id="stats-row">
       <span class="badge">+<span id="per-click">1</span> за клик</span>
       <span class="badge"><span id="per-sec">0</span>/сек</span>
+      <span class="badge boost-badge" id="boost-badge" hidden>⚡ ×2 <span id="boost-timer">60</span>с</span>
     </div>
   </header>
 
@@ -58,6 +59,17 @@
       </div>
     </div>
 
+    <div class="card card-reward">
+      <span class="card-ico">📺</span>
+      <div class="card-body">
+        <div class="card-name">Бонус-реклама</div>
+        <div class="card-desc" id="reward-desc">×2 монеты/клик на 60 сек</div>
+      </div>
+      <div class="card-right">
+        <button class="buy-btn reward-btn" id="buy-reward">Смотреть</button>
+      </div>
+    </div>
+
   </section>
 
   <!-- Футер -->
@@ -73,6 +85,17 @@
   </div>
 
   <!-- Туториал (первый запуск / кнопка «?») -->
+  <!-- Ежедневный бонус -->
+  <div id="daily-overlay" aria-modal="true" role="dialog" hidden>
+    <div id="daily-box">
+      <div id="daily-icon">🎁</div>
+      <h2 id="daily-title">Ежедневный бонус!</h2>
+      <div id="daily-amount">+<span id="daily-coins">0</span> 🪙</div>
+      <p id="daily-sub">Возвращайся завтра за новым бонусом</p>
+      <button id="daily-close">Забрать!</button>
+    </div>
+  </div>
+
   <div id="tutorial" aria-modal="true" role="dialog" hidden>
     <div id="tutorial-box">
       <h2 id="tutorial-title">🐹 Как играть</h2>
