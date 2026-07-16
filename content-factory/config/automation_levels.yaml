@@ -1,0 +1,35 @@
+# Уровни автоматизации по слоям контент-фабрики.
+# Пересматривается раз в квартал на основе content.metrics_timeseries —
+# не раньше, ролику нужно время, чтобы набрать метрики.
+
+layers:
+
+  trend_watch:          # Слой 1
+    automation: manual   # запускается тобой по конкретной ссылке
+
+  generate_concept:     # Слой 2
+    automation: manual_confirm
+    decision_stakes: medium
+    # Порог для будущего снижения ручного подтверждения — НЕ трогать
+    # раньше, чем наберётся минимум 3 месяца данных в metrics_timeseries
+    min_data_months_before_autonomy_review: 3
+
+  produce_voiceover:    # Слой 3
+    automation: full     # не зависит от исхода темы
+
+  produce_keying:        # Слой 3
+    automation: full
+
+  assemble_video:        # Слой 4
+    automation: full
+    qa_required: true
+
+  publish_gate:           # Слой 5
+    automation: manual_confirm
+    decision_stakes: high
+    always_confirm: true  # никогда не снижать, независимо от статистики
+
+  track_metrics:          # Слой 6
+    automation: full       # чистый сбор данных, низкий риск
+
+review_cadence_days: 90   # квартальный пересмотр, не месячный (в отличие от freelance)

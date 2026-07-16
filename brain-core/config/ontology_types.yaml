@@ -1,0 +1,42 @@
+# Формальные типы для config/ontology_types.yaml
+# Используется как справочник при написании кода новых подсистем —
+# не enforced автоматически на уровне БД (Postgres/Graphiti не проверяют
+# это на лету), но обязателен как конвенция при разработке.
+
+actor:
+  description: "Любой человек/сущность, с которой взаимодействует любая подсистема"
+  required_fields:
+    - role          # напр. 'freelance_client', 'content_viewer', 'godot_player'
+    - external_ref  # id во внешней системе, если применимо
+  storage:
+    postgres: brain.actors
+    graphiti: узел типа Actor с полем role
+
+decision:
+  description: "Единая точка подтверждения, независимо от подсистемы"
+  required_fields:
+    - subsystem     # 'freelance' | 'content' | 'godot' | ...
+    - layer         # доменный слой внутри подсистемы
+    - stakes        # 'low' | 'medium' | 'high'
+    - summary       # человекочитаемое краткое описание
+  storage:
+    postgres: brain.pending_decisions
+
+outcome:
+  description: "Общая обёртка результата, разная внутренняя структура по домену"
+  variants:
+    binary:
+      description: "Фиксированный финальный статус"
+      example_subsystem: freelance
+      fields: [status, notes]
+    time_series:
+      description: "Метрики, меняющиеся со временем после события"
+      example_subsystem: content
+      fields: [metric_name, value, measured_at]
+  storage:
+    postgres: "схема конкретной подсистемы (freelance.outcomes, content.outcomes, ...)"
+    graphiti: "факт с временной меткой, если значим для few-shot/паттернов"
+
+# Правило добавления новой подсистемы:
+# прежде чем писать в Graphiti в проде — обязательно прогнать
+# scripts/extraction_quality_test.py на реальных данных этой подсистемы.
