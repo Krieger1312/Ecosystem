@@ -1,0 +1,53 @@
+# Этот стек поднимается РЯДОМ с уже существующим Postgres/pgvector из Phase 1.
+# Он не заменяет и не трогает старый контейнер — только добавляет Neo4j + Graphiti API.
+
+services:
+  neo4j:
+    image: neo4j:5-community
+    container_name: brain_neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: "neo4j/${NEO4J_PASSWORD}"
+      NEO4J_PLUGINS: '["apoc"]'
+    ports:
+      - "7474:7474"   # веб-интерфейс Neo4j Browser
+      - "7687:7687"   # bolt protocol
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD", "wget", "-O", "/dev/null", "http://localhost:7474"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  graphiti:
+    image: zepai/graphiti:latest
+    container_name: brain_graphiti
+    restart: unless-stopped
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    environment:
+      NEO4J_URI: "bolt://neo4j:7687"
+      NEO4J_USER: "neo4j"
+      NEO4J_PASSWORD: "${NEO4J_PASSWORD}"
+      # zepai/graphiti:latest говорит только с одним OpenAI-совместимым провайдером
+      # (см. graph_service/config.py в образе: openai_api_key/openai_base_url —
+      # ни OPENAI_COMPATIBLE_*, ни ANTHROPIC_API_KEY этот контейнер не читает).
+      # Поэтому сюда идёт Deepseek (дешёвая массовая обработка), а Claude для
+      # сложных решений вызывается отдельно, поверх Graphiti API, из наших скриптов.
+      OPENAI_BASE_URL: "${DEEPSEEK_BASE_URL}"
+      OPENAI_API_KEY: "${DEEPSEEK_API_KEY}"
+    ports:
+      - "8000:8000"
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+
+# Проверено вживую (docker compose up) при подготовке этого пакета:
+# образ zepai/graphiti:latest реально существует и поднимается с Neo4j 5-community,
+# healthcheck /healthcheck отвечает {"status":"healthy"}. Но переменные окружения
+# в этой ревизии образа отличались от изначально предполагавшихся — см. правку выше.
+# При деплое на VPS всё равно свериться с getzep/graphiti на случай более новой ревизии.
